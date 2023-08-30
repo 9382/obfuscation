@@ -1,0 +1,60 @@
+Return management
+
+Functions who's return dictates a breaking statement
+* ReturnStatement
+* BreakStatement
+* ContinueStatement
+
+The returns of these statements land themselves into executeStatList, which MUST immediately evaluate the values if its a ReturnStatement or risk losing the right scope
+
+When executeStatList processes a return, it should ideally pass on an internally managed table along the structure of {Parsed=true, Type=1/2/3, Data=({} if applicable, nil otherwise) }
+Type 1 is Return, Type 2 is Break, Type 3 is Continue
+The data should not be expanded unless being handled by the end of the execution loop or a Function.
+
+Functions who's return dictates propogation of a return statement
+(This means they themselves weren't a return statement, but instead a condition statement raising the return to the closest appropriate target)
+* IfStatement
+* WhileStatement
+* RepeatStatement
+* DoStatement
+* Function
+(and GenericForStatement / NumericForStatement, which I forgot)
+
+A WhileStatement and RepeatStatement must respect requests to break the loop, ignore requests to continue the loop, and pass on returns
+
+The ending execution loop and Functions must punish any break or continue statement that they receive, as these should never occur. As said above, they should also return the raw data rather than the internal marker.
+
+An IfStatement and DoStatement should simply pass up any return they have, regardless of its type
+
+
+
+The general idea of implementing the above goes as follows:
+
+ReturnStatement
+	Simply return the arguments
+BreakStatement
+	Return true
+ContinueStatement
+	Return false
+
+executeStatList
+	If the return type is a table (Return):
+		Ensure its not an internal marker (Check if t.Parsed == true)
+		If it is NOT an internal marker:
+			Parse under the current scope and create an internal marker and return that
+		Else:
+			Return the internal marker unmodified
+	Else if the return type is a boolean (Break/Continue):
+		Create the relevant internal marker and return that
+
+Function and CreateExecutionLoop
+	Error if receiving a break or continue
+	Return the unpack of the internal marker's data
+
+IfStatement and DoStatement
+	Pass on the internal marker unmodified in all scenarios
+
+WhileStatement and RepeatStatement (and GenericForStatement / NumericForStatement, which I forgot)
+	If the internal marker is a Break, exit the loop via a return but do NOT pass on anything
+	If the internal marker is a Continue, simply ignore the return and continue on as normal
+	If the internal marker is a Return, pass it on unmodified
