@@ -1285,7 +1285,7 @@ local bitmanager = (function()
 		return tonumber(b,2)
 	end
 	local function ToBit(n,pad)
-		assert(math.floor(n) == n,"Can't convert a non-int to regular bit format")
+		assert(n%1 == 0,"Can't convert a non-int to regular bit format")
 		if n == 0 then
 			if pad then
 				return padleft("0",pad,"0")
@@ -1313,7 +1313,7 @@ local bitmanager = (function()
 		end
 	end
 	local function DecToBit(d,pad)
-		assert(math.abs(d) < 1,"Can't convert non-zero integral decimal to decimal bit")
+		assert(math.abs(d) < 1,"Can't convert non-zero integral decimals to decimal bit")
 		assert(type(pad)=="number","DecToBit requires a valid pad length")
 		local result = ""
 		local iterations = 0
@@ -1437,13 +1437,13 @@ local serializer = (function()
 				Output:WriteString(obj)
 				Output:Write(0,8) --Null terminator
 			elseif type(obj) == "number" then
-				if obj == math.floor(obj) and obj < 8 and obj >= 0 then
+				if obj%1 == 0 and obj < 8 and obj >= 0 then
 					Output:Write(TYPE_NUMBER_SUPERBASIC,TYPE_WIDTH)
 					Output:Write(obj,3)
-				elseif obj == math.floor(obj) and obj < 32 and obj >= 0 then
+				elseif obj%1 == 0 and obj < 32 and obj >= 0 then
 					Output:Write(TYPE_NUMBER_BASIC,TYPE_WIDTH)
 					Output:Write(obj,5)
-				elseif obj == math.floor(obj) and obj < 256 and obj >= 0 then
+				elseif obj%1 == 0 and obj < 256 and obj >= 0 then
 					Output:Write(TYPE_NUMBER_SIMPLE,TYPE_WIDTH)
 					Output:Write(obj,8)
 				else

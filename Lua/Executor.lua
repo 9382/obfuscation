@@ -451,7 +451,7 @@ local function CreateExecutionLoop(ast)
 				return Tonumber(b,2)
 			end
 			local function ToBit(n,pad)
-				Assert(mathfloor(n) == n)--,"Can't convert non-int")
+				--Assert(n%1 == 0,"Can't convert non-int")
 				if n == 0 then
 					return padleft("0",pad or 1,"0")
 				end
