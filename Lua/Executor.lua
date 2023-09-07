@@ -89,7 +89,35 @@ local function CreateExecutionLoop(ast)
 
 	executeExpression = function(expr, scope, SpecialState)
 		local AstType = expr[7]
-		if AstType == 2 then
+		if AstType == 1 then
+			return function(...)
+				local childScope = CreateExecutionScope(scope)
+				local inputArgs = {...}
+				for i = 1,#expr[3] do
+					local arg = expr[3][i]
+					if arg then
+						childScope:ML(arg[0], inputArgs[i])
+					end
+				end
+				if expr[14] then
+					local varargs = {}
+					for i = #expr[3]+1, Select("#",...) do
+						HandleReturnAmbiguity(varargs, inputArgs[i])
+					end
+					childScope:ML(-1, varargs) -- -1 is the reserved LocalID for local "..."
+				end
+				local ReturnData = executeStatList(expr[1], childScope)
+				if not ReturnData then --No return statement to handle
+					return
+				elseif ReturnData.T == 1 then --Get the return data
+					return SafeUnpack(ReturnData.D)
+				else --Uh oh!
+					local statement = ReturnData.T == 2 and "break" or "continue"
+					Error("Illegal attempt to "..statement.." the current scope")
+				end
+			end
+
+		elseif AstType == 2 then
 			if SpecialState then
 				return expr, True
 			else
@@ -104,17 +132,88 @@ local function CreateExecutionLoop(ast)
 				return FunctionEnvironment[expr[0]]
 			end
 
+		elseif AstType == 3 then
+			if SpecialState then
+				return expr, True
+			else
+				if expr[6] == False then
+					return executeExpression(expr[5], scope)[expr[4][29]]
+				elseif expr[6] == True then --Account for namecall calls of functions by forcing in a self
+					local Container = executeExpression(expr[5], scope)
+					local out = Container[expr[4][29]]
+					if Type(out) == "function" then
+						return function(...)
+							return out(Container, ...)
+						end
+					else
+						return out
+					end
+				end
+			end
+
+		elseif AstType == 4 then
+			if SpecialState then
+				return expr, True
+			else
+				return executeExpression(expr[5], scope)[executeExpression(expr[2], scope)]
+			end
+
+		elseif AstType == 5
+		or     AstType == 6
+		or     AstType == 7 then
+			local args = {}
+			for _, arg in iPairs(expr[3]) do
+				if AstType == 6 then
+					args = {arg[29]}
+				else
+					HandleReturnAmbiguity(args, executeExpression(arg, scope))
+				end
+			end
+			return executeExpression(expr[5], scope)(SafeUnpack(args))
+
 		elseif AstType == 8 then
 			return Tonumber(expr[16][29])
 
 		elseif AstType == 9 then
 			return expr[16][29]
 
+		elseif AstType == 10 then
+			return Nil
+
 		elseif AstType == 11 then
 			return expr[16]
 
-		elseif AstType == 10 then
-			return Nil
+		elseif AstType == 12 then
+			return SafeUnpack(scope:GL(-1)[16], True) -- -1 is the reserved LocalID for local "..."
+
+		elseif AstType == 13 then
+			local out = {}
+			--Process all key'd entries first
+			for _, entry in iPairs(expr[13]) do
+				if entry[27] == 0 then
+					out[executeExpression(entry[28], scope)] = executeExpression(entry[16], scope)
+				elseif entry[27] == 1 then
+					out[entry[28]] = executeExpression(entry[16], scope)
+				end
+			end
+			--And then do the unkey'd ones
+			for _, entry in iPairs(expr[13]) do
+				if entry[27] == 2 then
+					HandleReturnAmbiguity(out, executeExpression(entry[16], scope))
+				end
+			end
+			return out
+
+		elseif AstType == 14 then
+			local Rhs = executeExpression(expr[9], scope)
+			local op = expr[12]
+			if op == 1 then
+				return -Rhs
+			elseif op == 2 then
+				return not Rhs
+			elseif op == 3 then
+				return #Rhs
+			end
 
 		elseif AstType == 15 then
 			local op = expr[12]
@@ -154,150 +253,30 @@ local function CreateExecutionLoop(ast)
 				return Lhs >= Rhs
 			end
 
-		elseif AstType == 14 then
-			local Rhs = executeExpression(expr[9], scope)
-			local op = expr[12]
-			if op == 1 then
-				return -Rhs
-			elseif op == 2 then
-				return not Rhs
-			elseif op == 3 then
-				return #Rhs
-			end
-
-		elseif AstType == 12 then
-			return SafeUnpack(scope:GL(-1)[16], True) -- -1 is the reserved LocalID for local "..."
-
-		elseif AstType == 5 or
-		AstType == 7 or
-		AstType == 6 then
-			local args = {}
-			for _, arg in iPairs(expr[3]) do
-				if AstType == 6 then
-					args = {arg[29]}
-				else
-					HandleReturnAmbiguity(args, executeExpression(arg, scope))
-				end
-			end
-			return executeExpression(expr[5], scope)(SafeUnpack(args))
-
-		elseif AstType == 4 then
-			if SpecialState then
-				return expr, True
-			else
-				return executeExpression(expr[5], scope)[executeExpression(expr[2], scope)]
-			end
-
-		elseif AstType == 3 then
-			if SpecialState then
-				return expr, True
-			else
-				if expr[6] == False then
-					return executeExpression(expr[5], scope)[expr[4][29]]
-				elseif expr[6] == True then --Account for namecall calls of functions by forcing in a self
-					local Container = executeExpression(expr[5], scope)
-					local out = Container[expr[4][29]]
-					if Type(out) == "function" then
-						return function(...)
-							return out(Container, ...)
-						end
-					else
-						return out
-					end
-				end
-			end
-
-		elseif AstType == 1 then
-			return function(...)
-				local childScope = CreateExecutionScope(scope)
-				local inputArgs = {...}
-				for i = 1,#expr[3] do
-					local arg = expr[3][i]
-					if arg then
-						childScope:ML(arg[0], inputArgs[i])
-					end
-				end
-				if expr[14] then
-					local varargs = {}
-					for i = #expr[3]+1, Select("#",...) do
-						HandleReturnAmbiguity(varargs, inputArgs[i])
-					end
-					childScope:ML(-1, varargs) -- -1 is the reserved LocalID for local "..."
-				end
-				local ReturnData = executeStatList(expr[1], childScope)
-				if not ReturnData then --No return statement to handle
-					return
-				elseif ReturnData.T == 1 then --Get the return data
-					return SafeUnpack(ReturnData.D)
-				else --Uh oh!
-					local statement = ReturnData.T == 2 and "break" or "continue"
-					Error("Illegal attempt to "..statement.." the current scope")
-				end
-			end
-
-		elseif AstType == 13 then
-			local out = {}
-			--Process all key'd entries first
-			for _, entry in iPairs(expr[13]) do
-				if entry[27] == 0 then
-					out[executeExpression(entry[28], scope)] = executeExpression(entry[16], scope)
-				elseif entry[27] == 1 then
-					out[entry[28]] = executeExpression(entry[16], scope)
-				end
-			end
-			--And then do the unkey'd ones
-			for _, entry in iPairs(expr[13]) do
-				if entry[27] == 2 then
-					HandleReturnAmbiguity(out, executeExpression(entry[16], scope))
-				end
-			end
-			return out
-
 		end
 	end
 
 	local executeStatement = function(statement, scope)
 		local AstType = statement[7]
-		if AstType == 12 then
-			local out = {}
-			for i = 1, #statement[9] do
-				HandleReturnAmbiguity(out, executeExpression(statement[9][i], scope))
-			end
-			for i = 1, #statement[8] do
-				local Lhs, wasExprExit = executeExpression(statement[8][i], scope, True)
-				local Rhs = out[i]
-				if wasExprExit then
-					if Lhs[7] == 2 then
-						if Lhs[17] then
-							scope:SL(Lhs[0], Rhs)
-						else
-							FunctionEnvironment[Lhs[0]] = Rhs
-						end
-
-					elseif Lhs[7] == 3 then
-						local Container = executeExpression(Lhs[5], scope)
-						Container[Lhs[4][29]] = Rhs
-
-					else--if Lhs[7] == 4 then
-						local Container = executeExpression(Lhs[5], scope)
-						Container[executeExpression(Lhs[2], scope)] = Rhs
-
-					--It will always be one of the above types. If it's not, thats a serializer error
-					end
+		if AstType == 1 then
+			local name = statement[0]
+			if name[7] == 3 then
+				local Container = executeExpression(name[5], scope)
+				if name[6] == False then
+					local f = executeExpression(statement, scope)
+					Container[name[4][29]] = f
+				elseif name[6] == True then --Special flag call to ensure self logic
+					local f = executeExpression(statement, scope, True)
+					Container[name[4][29]] = f
 				end
-			end
 
-		elseif AstType == 13 then
-			executeExpression(statement[21], scope)
-
-		elseif AstType == 8 then
-			local out = {}
-			for i = 1, #statement[15] do
-				HandleReturnAmbiguity(out, executeExpression(statement[15][i], scope))
-			end
-			for i = 1, #statement[18] do
-				local l = statement[18][i]
-				scope:ML(l[0], out[i])
+			else
+				local f = executeExpression(statement, scope)
+				if statement[22] then
+					scope:ML(name[0], f)
+				else
+					FunctionEnvironment[name[0]] = f
+				end
 			end
 
 		elseif AstType == 2 then
@@ -322,22 +301,15 @@ local function CreateExecutionLoop(ast)
 		elseif AstType == 4 then
 			return executeStatList(statement[1], CreateExecutionScope(scope))
 
-		elseif AstType == 9 then
-			local arguments = {}
-			for _, arg in iPairs(statement[3]) do
-				HandleReturnAmbiguity(arguments, executeExpression(arg, scope))
-			end
-			return arguments
+		elseif AstType == 5 then
+			local var = Tonumber(executeExpression(statement[23], scope))
+			local limit = Tonumber(executeExpression(statement[24], scope))
+			local step = statement[25] and Tonumber(executeExpression(statement[25], scope)) or 1
 
-		elseif AstType == 10 then
-			return True --This just works, ok?
-
-		elseif AstType == 11 then
-			return False --This too
-
-		elseif AstType == 7 then
-			repeat
-				local ReturnData = executeStatList(statement[1], CreateExecutionScope(scope))
+			while (step > 0 and var <= limit) or (step <= 0 and var >= limit) do
+				local childScope = CreateExecutionScope(scope)
+				childScope:ML(statement[26][0], var)
+				local ReturnData = executeStatList(statement[1], childScope)
 				if ReturnData then
 					if ReturnData.T == 2 then --Break, get out
 						return
@@ -345,27 +317,7 @@ local function CreateExecutionLoop(ast)
 						return ReturnData --Return, propogate
 					end --Else: A continue, just keep going
 				end
-			until executeExpression(statement[10], scope)
-
-		elseif AstType == 1 then
-			local name = statement[0]
-			if name[7] == 3 then
-				local Container = executeExpression(name[5], scope)
-				if name[6] == False then
-					local f = executeExpression(statement, scope)
-					Container[name[4][29]] = f
-				elseif name[6] == True then --Special flag call to ensure self logic
-					local f = executeExpression(statement, scope, True)
-					Container[name[4][29]] = f
-				end
-
-			else
-				local f = executeExpression(statement, scope)
-				if statement[22] then
-					scope:ML(name[0], f)
-				else
-					FunctionEnvironment[name[0]] = f
-				end
+				var = var + step
 			end
 
 		elseif AstType == 6 then
@@ -402,15 +354,9 @@ local function CreateExecutionLoop(ast)
 				end
 			end
 
-		elseif AstType == 5 then
-			local var = Tonumber(executeExpression(statement[23], scope))
-			local limit = Tonumber(executeExpression(statement[24], scope))
-			local step = statement[25] and Tonumber(executeExpression(statement[25], scope)) or 1
-
-			while (step > 0 and var <= limit) or (step <= 0 and var >= limit) do
-				local childScope = CreateExecutionScope(scope)
-				childScope:ML(statement[26][0], var)
-				local ReturnData = executeStatList(statement[1], childScope)
+		elseif AstType == 7 then
+			repeat
+				local ReturnData = executeStatList(statement[1], CreateExecutionScope(scope))
 				if ReturnData then
 					if ReturnData.T == 2 then --Break, get out
 						return
@@ -418,8 +364,62 @@ local function CreateExecutionLoop(ast)
 						return ReturnData --Return, propogate
 					end --Else: A continue, just keep going
 				end
-				var = var + step
+			until executeExpression(statement[10], scope)
+
+		elseif AstType == 8 then
+			local out = {}
+			for i = 1, #statement[15] do
+				HandleReturnAmbiguity(out, executeExpression(statement[15][i], scope))
 			end
+			for i = 1, #statement[18] do
+				local l = statement[18][i]
+				scope:ML(l[0], out[i])
+			end
+
+		elseif AstType == 9 then
+			local arguments = {}
+			for _, arg in iPairs(statement[3]) do
+				HandleReturnAmbiguity(arguments, executeExpression(arg, scope))
+			end
+			return arguments
+
+		elseif AstType == 10 then
+			return True --This just works, ok?
+
+		elseif AstType == 11 then
+			return False --This too
+
+		elseif AstType == 12 then
+			local out = {}
+			for i = 1, #statement[9] do
+				HandleReturnAmbiguity(out, executeExpression(statement[9][i], scope))
+			end
+			for i = 1, #statement[8] do
+				local Lhs, wasExprExit = executeExpression(statement[8][i], scope, True)
+				local Rhs = out[i]
+				if wasExprExit then
+					if Lhs[7] == 2 then
+						if Lhs[17] then
+							scope:SL(Lhs[0], Rhs)
+						else
+							FunctionEnvironment[Lhs[0]] = Rhs
+						end
+
+					elseif Lhs[7] == 3 then
+						local Container = executeExpression(Lhs[5], scope)
+						Container[Lhs[4][29]] = Rhs
+
+					else--if Lhs[7] == 4 then
+						local Container = executeExpression(Lhs[5], scope)
+						Container[executeExpression(Lhs[2], scope)] = Rhs
+
+					--It will always be one of the above types. If it's not, thats a serializer error
+					end
+				end
+			end
+
+		elseif AstType == 13 then
+			executeExpression(statement[21], scope)
 
 		end
 	end
