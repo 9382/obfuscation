@@ -1510,6 +1510,9 @@ local UnOpToID = {
 
 local function AssignKey(t,k,n)
 	if t[k] ~= nil then
+		if t[n] ~= nil then
+			print("[WARNING] Overriding",n,"from",t[n],"to",t[k],"despite not expecting to")
+		end
 		t[n] = t[k]
 		t[k] = nil
 	end
@@ -1601,58 +1604,60 @@ local function deepModify(t, firstCall)
 		end
 	end
 	if t.Indexer then
-		t[6] = (t.Indexer == ":" and true or false)
+		t[2] = (t.Indexer == ":" and true or false)
 		t.Indexer = nil
 	end
 	if t.AstType then
-		t[7] = AstTypeToID[t.AstType] or math.random(1,31) --If it doesnt matter, just have fun
+		t[5] = AstTypeToID[t.AstType] or math.random(1,15) --If it doesnt matter, just have fun
 		t.AstType = nil
 	end
 	if t.Type then
 		local v = t.Type
 		t.Type = nil
 		if v == "Key" then
-			t[27] = 0
+			t[2] = 0
 		elseif v == "KeyString" then
-			t[27] = 1
+			t[2] = 1
 		elseif v == "Value" then
-			t[27] = 2
+			t[2] = 2
 		end
 	end
 
 	--Numerical naming (it's nicer on the serializer's size)
+	--Everything is applied in context, so a lot of keys here copy each other (See the relevant theory txt)
 	AssignKey(t,"Name",0)
 	AssignKey(t,"Body",1)
-	AssignKey(t,"Index",2)
-	AssignKey(t,"Arguments",3)
-	AssignKey(t,"Ident",4)
-	AssignKey(t,"Base",5)
-	--6 = Indexer
-	--7 = AstType
-	AssignKey(t,"Lhs",8)
-	AssignKey(t,"Rhs",9)
-	AssignKey(t,"Condition",10)
-	AssignKey(t,"Clauses",11)
-	AssignKey(t,"Op",12)
-	AssignKey(t,"EntryList",13)
-	AssignKey(t,"VarArg",14)
-	AssignKey(t,"InitList",15)
-	AssignKey(t,"Value",16)
-	AssignKey(t,"Local",17)
-	AssignKey(t,"LocalList",18)
-	AssignKey(t,"Generators",19)
-	AssignKey(t,"VariableList",20)
-	AssignKey(t,"Expression",21)
-	AssignKey(t,"IsLocal",22)
-	AssignKey(t,"Start",23)
-	AssignKey(t,"End",24)
-	AssignKey(t,"Step",25)
-	AssignKey(t,"Variable",26)
-	--27 = Type
-	AssignKey(t,"Key",28)
-	AssignKey(t,"Data",29)
+	AssignKey(t,"Index",1)
+	AssignKey(t,"Arguments",2)
+	AssignKey(t,"Ident",1)
+	AssignKey(t,"Base",0) --old 5
+	--Indexer = 2
+	--AstType = 5
+	AssignKey(t,"Lhs",1)
+	AssignKey(t,"Rhs",0)
+	AssignKey(t,"Condition",0) --old 10
+	AssignKey(t,"Clauses",0)
+	AssignKey(t,"Op",2)
+	AssignKey(t,"EntryList",1)
+	AssignKey(t,"VarArg",3)
+	AssignKey(t,"InitList",0) --old 15
+	AssignKey(t,"Value",1)
+	AssignKey(t,"Local",2)
+	AssignKey(t,"LocalList",1)
+	AssignKey(t,"Generators",0)
+	AssignKey(t,"VariableList",2) --old 20
+	AssignKey(t,"Expression",0)
+	AssignKey(t,"IsLocal",4)
+	AssignKey(t,"Start",0)
+	AssignKey(t,"End",2)
+	AssignKey(t,"Step",3) --old 25
+	AssignKey(t,"Variable",4)
+	--Type = 2
+	AssignKey(t,"Key",3)
 	if t.Constant ~= nil then --Override string form containing surrounding quotes with the constant
-		AssignKey(t,"Constant",29)
+		AssignKey(t,"Constant",0)
+	else
+		AssignKey(t,"Data",0)
 	end
 
 	--Fake data

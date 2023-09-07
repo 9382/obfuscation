@@ -33,13 +33,13 @@ local function CreateExecutionLoop(ast)
 			if not l then
 				Error("Bad SL "..Tostring(name)) --Caused by self bad practices - can't be the result of bad input
 			end
-			l[16] = value
+			l[1] = value
 		end
 		function scope:ML(name, value)
 			--create my own var
 			local my = {}
 			my[0] = name
-			my[16] = value
+			my[1] = value
 			scope.L[name] = my
 			return my
 		end
@@ -88,20 +88,20 @@ local function CreateExecutionLoop(ast)
 	end
 
 	executeExpression = function(expr, scope, SpecialState)
-		local AstType = expr[7]
+		local AstType = expr[5]
 		if AstType == 1 then
 			return function(...)
 				local childScope = CreateExecutionScope(scope)
 				local inputArgs = {...}
-				for i = 1,#expr[3] do
-					local arg = expr[3][i]
+				for i = 1,#expr[2] do
+					local arg = expr[2][i]
 					if arg then
 						childScope:ML(arg[0], inputArgs[i])
 					end
 				end
-				if expr[14] then
+				if expr[3] then
 					local varargs = {}
-					for i = #expr[3]+1, Select("#",...) do
+					for i = #expr[2]+1, Select("#",...) do
 						HandleReturnAmbiguity(varargs, inputArgs[i])
 					end
 					childScope:ML(-1, varargs) -- -1 is the reserved LocalID for local "..."
@@ -121,12 +121,12 @@ local function CreateExecutionLoop(ast)
 			if SpecialState then
 				return expr, True
 			else
-				if expr[17] then
+				if expr[2] then
 					local LocalDefinition = scope:GL(expr[0])
 					if not LocalDefinition then
 						Error("Expected '" .. Tostring(expr[0]) .. "' was missing") --Fault in the Parser or Executor
 					else
-						return LocalDefinition[16]
+						return LocalDefinition[1]
 					end
 				end
 				return FunctionEnvironment[expr[0]]
@@ -136,11 +136,11 @@ local function CreateExecutionLoop(ast)
 			if SpecialState then
 				return expr, True
 			else
-				if expr[6] == False then
-					return executeExpression(expr[5], scope)[expr[4][29]]
-				elseif expr[6] == True then --Account for namecall calls of functions by forcing in a self
-					local Container = executeExpression(expr[5], scope)
-					local out = Container[expr[4][29]]
+				if expr[2] == False then
+					return executeExpression(expr[0], scope)[expr[1][0]]
+				elseif expr[2] == True then --Account for namecall calls of functions by forcing in a self
+					local Container = executeExpression(expr[0], scope)
+					local out = Container[expr[1][0]]
 					if Type(out) == "function" then
 						return function(...)
 							return out(Container, ...)
@@ -155,58 +155,58 @@ local function CreateExecutionLoop(ast)
 			if SpecialState then
 				return expr, True
 			else
-				return executeExpression(expr[5], scope)[executeExpression(expr[2], scope)]
+				return executeExpression(expr[0], scope)[executeExpression(expr[1], scope)]
 			end
 
 		elseif AstType == 5
 		or     AstType == 6
 		or     AstType == 7 then
 			local args = {}
-			for _, arg in iPairs(expr[3]) do
+			for _, arg in iPairs(expr[2]) do
 				if AstType == 6 then
-					args = {arg[29]}
+					args = {arg[0]}
 				else
 					HandleReturnAmbiguity(args, executeExpression(arg, scope))
 				end
 			end
-			return executeExpression(expr[5], scope)(SafeUnpack(args))
+			return executeExpression(expr[0], scope)(SafeUnpack(args))
 
 		elseif AstType == 8 then
-			return Tonumber(expr[16][29])
+			return Tonumber(expr[1][0])
 
 		elseif AstType == 9 then
-			return expr[16][29]
+			return expr[1][0]
 
 		elseif AstType == 10 then
 			return Nil
 
 		elseif AstType == 11 then
-			return expr[16]
+			return expr[1]
 
 		elseif AstType == 12 then
-			return SafeUnpack(scope:GL(-1)[16], True) -- -1 is the reserved LocalID for local "..."
+			return SafeUnpack(scope:GL(-1)[1], True) -- -1 is the reserved LocalID for local "..."
 
 		elseif AstType == 13 then
 			local out = {}
 			--Process all key'd entries first
-			for _, entry in iPairs(expr[13]) do
-				if entry[27] == 0 then
-					out[executeExpression(entry[28], scope)] = executeExpression(entry[16], scope)
-				elseif entry[27] == 1 then
-					out[entry[28]] = executeExpression(entry[16], scope)
+			for _, entry in iPairs(expr[1]) do
+				if entry[2] == 0 then
+					out[executeExpression(entry[3], scope)] = executeExpression(entry[1], scope)
+				elseif entry[2] == 1 then
+					out[entry[3]] = executeExpression(entry[1], scope)
 				end
 			end
 			--And then do the unkey'd ones
-			for _, entry in iPairs(expr[13]) do
-				if entry[27] == 2 then
-					HandleReturnAmbiguity(out, executeExpression(entry[16], scope))
+			for _, entry in iPairs(expr[1]) do
+				if entry[2] == 2 then
+					HandleReturnAmbiguity(out, executeExpression(entry[1], scope))
 				end
 			end
 			return out
 
 		elseif AstType == 14 then
-			local Rhs = executeExpression(expr[9], scope)
-			local op = expr[12]
+			local Rhs = executeExpression(expr[0], scope)
+			local op = expr[2]
 			if op == 1 then
 				return -Rhs
 			elseif op == 2 then
@@ -216,15 +216,15 @@ local function CreateExecutionLoop(ast)
 			end
 
 		elseif AstType == 15 then
-			local op = expr[12]
-			local Lhs = executeExpression(expr[8], scope)
+			local op = expr[2]
+			local Lhs = executeExpression(expr[1], scope)
 			--The RHS should only be evaluated for and/or if the LHS doesn't complete the condition
 			if op == 14 then
-				return Lhs and executeExpression(expr[9], scope)
+				return Lhs and executeExpression(expr[0], scope)
 			elseif op == 15 then
-				return Lhs or executeExpression(expr[9], scope)
+				return Lhs or executeExpression(expr[0], scope)
 			end
-			local Rhs = executeExpression(expr[9], scope)
+			local Rhs = executeExpression(expr[0], scope)
 			if op == 1 then
 				return Lhs + Rhs
 			elseif op == 2 then
@@ -257,22 +257,22 @@ local function CreateExecutionLoop(ast)
 	end
 
 	local executeStatement = function(statement, scope)
-		local AstType = statement[7]
+		local AstType = statement[5]
 		if AstType == 1 then
 			local name = statement[0]
-			if name[7] == 3 then
-				local Container = executeExpression(name[5], scope)
-				if name[6] == False then
+			if name[5] == 3 then
+				local Container = executeExpression(name[0], scope)
+				if name[2] == False then
 					local f = executeExpression(statement, scope)
-					Container[name[4][29]] = f
-				elseif name[6] == True then --Special flag call to ensure self logic
+					Container[name[1][0]] = f
+				elseif name[2] == True then --Special flag call to ensure self logic
 					local f = executeExpression(statement, scope, True)
-					Container[name[4][29]] = f
+					Container[name[1][0]] = f
 				end
 
 			else
 				local f = executeExpression(statement, scope)
-				if statement[22] then
+				if statement[4] then
 					scope:ML(name[0], f)
 				else
 					FunctionEnvironment[name[0]] = f
@@ -280,14 +280,14 @@ local function CreateExecutionLoop(ast)
 			end
 
 		elseif AstType == 2 then
-			for _, Clause in iPairs(statement[11]) do
-				if not Clause[10] or executeExpression(Clause[10], scope) then
+			for _, Clause in iPairs(statement[0]) do
+				if not Clause[0] or executeExpression(Clause[0], scope) then
 					return executeStatList(Clause[1], CreateExecutionScope(scope))
 				end
 			end
 
 		elseif AstType == 3 then
-			while executeExpression(statement[10], scope) do
+			while executeExpression(statement[0], scope) do
 				local ReturnData = executeStatList(statement[1], CreateExecutionScope(scope))
 				if ReturnData then
 					if ReturnData.T == 2 then --Break, get out
@@ -302,13 +302,13 @@ local function CreateExecutionLoop(ast)
 			return executeStatList(statement[1], CreateExecutionScope(scope))
 
 		elseif AstType == 5 then
-			local var = Tonumber(executeExpression(statement[23], scope))
-			local limit = Tonumber(executeExpression(statement[24], scope))
-			local step = statement[25] and Tonumber(executeExpression(statement[25], scope)) or 1
+			local var = Tonumber(executeExpression(statement[0], scope))
+			local limit = Tonumber(executeExpression(statement[2], scope))
+			local step = statement[3] and Tonumber(executeExpression(statement[3], scope)) or 1
 
 			while (step > 0 and var <= limit) or (step <= 0 and var >= limit) do
 				local childScope = CreateExecutionScope(scope)
-				childScope:ML(statement[26][0], var)
+				childScope:ML(statement[4][0], var)
 				local ReturnData = executeStatList(statement[1], childScope)
 				if ReturnData then
 					if ReturnData.T == 2 then --Break, get out
@@ -322,7 +322,7 @@ local function CreateExecutionLoop(ast)
 
 		elseif AstType == 6 then
 			local gen1, gen2, gen3
-			local generators = statement[19]
+			local generators = statement[0]
 			if not generators[2] then
 				gen1, gen2, gen3 = executeExpression(generators[1], scope)
 			else
@@ -342,7 +342,7 @@ local function CreateExecutionLoop(ast)
 				end
 				--Define for-loop locals
 				for i = 1, #args do
-					childScope:ML(statement[20][i][0], args[i])
+					childScope:ML(statement[2][i][0], args[i])
 				end
 				local ReturnData = executeStatList(statement[1], childScope)
 				if ReturnData then
@@ -364,21 +364,21 @@ local function CreateExecutionLoop(ast)
 						return ReturnData --Return, propogate
 					end --Else: A continue, just keep going
 				end
-			until executeExpression(statement[10], scope)
+			until executeExpression(statement[0], scope)
 
 		elseif AstType == 8 then
 			local out = {}
-			for i = 1, #statement[15] do
-				HandleReturnAmbiguity(out, executeExpression(statement[15][i], scope))
+			for i = 1, #statement[0] do
+				HandleReturnAmbiguity(out, executeExpression(statement[0][i], scope))
 			end
-			for i = 1, #statement[18] do
-				local l = statement[18][i]
+			for i = 1, #statement[1] do
+				local l = statement[1][i]
 				scope:ML(l[0], out[i])
 			end
 
 		elseif AstType == 9 then
 			local arguments = {}
-			for _, arg in iPairs(statement[3]) do
+			for _, arg in iPairs(statement[2]) do
 				HandleReturnAmbiguity(arguments, executeExpression(arg, scope))
 			end
 			return arguments
@@ -391,27 +391,27 @@ local function CreateExecutionLoop(ast)
 
 		elseif AstType == 12 then
 			local out = {}
-			for i = 1, #statement[9] do
-				HandleReturnAmbiguity(out, executeExpression(statement[9][i], scope))
+			for i = 1, #statement[0] do
+				HandleReturnAmbiguity(out, executeExpression(statement[0][i], scope))
 			end
-			for i = 1, #statement[8] do
-				local Lhs, wasExprExit = executeExpression(statement[8][i], scope, True)
+			for i = 1, #statement[1] do
+				local Lhs, wasExprExit = executeExpression(statement[1][i], scope, True)
 				local Rhs = out[i]
 				if wasExprExit then
-					if Lhs[7] == 2 then
-						if Lhs[17] then
+					if Lhs[5] == 2 then
+						if Lhs[2] then
 							scope:SL(Lhs[0], Rhs)
 						else
 							FunctionEnvironment[Lhs[0]] = Rhs
 						end
 
-					elseif Lhs[7] == 3 then
-						local Container = executeExpression(Lhs[5], scope)
-						Container[Lhs[4][29]] = Rhs
+					elseif Lhs[5] == 3 then
+						local Container = executeExpression(Lhs[0], scope)
+						Container[Lhs[1][0]] = Rhs
 
-					else--if Lhs[7] == 4 then
-						local Container = executeExpression(Lhs[5], scope)
-						Container[executeExpression(Lhs[2], scope)] = Rhs
+					else--if Lhs[5] == 4 then
+						local Container = executeExpression(Lhs[0], scope)
+						Container[executeExpression(Lhs[1], scope)] = Rhs
 
 					--It will always be one of the above types. If it's not, thats a serializer error
 					end
@@ -419,7 +419,7 @@ local function CreateExecutionLoop(ast)
 			end
 
 		elseif AstType == 13 then
-			executeExpression(statement[21], scope)
+			executeExpression(statement[0], scope)
 
 		end
 	end
