@@ -1617,6 +1617,9 @@ local function WriteStatement(Statement, Scope)
 		end
 
 	elseif Statement.AstType == "ReturnStatement" then
+		if #Statement.Arguments == 0 then
+			return "return"
+		end
 		local NewArguments = {}
 		for i,Argument in ipairs(Statement.Arguments) do
 			NewArguments[i] = WriteExpression(Argument, Scope)
