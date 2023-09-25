@@ -6,8 +6,8 @@ local function CreateExecutionLoop(ast)
 	local mathfloor, mathlog
 		= math.floor, math.log
 
-	local Type, iPairs, Select, Unpack, Getfenv, Error, Tonumber, Tostring, Assert
-		= type, ipairs, select, unpack, getfenv, error, tonumber, tostring, assert
+	local Type, iPairs, Select, Unpack, Getfenv, Tonumber, Tostring, Assert
+		= type, ipairs, select, unpack, getfenv, tonumber, tostring, assert
 
 	local True, False, Nil
 		= true, false, nil
@@ -29,11 +29,7 @@ local function CreateExecutionLoop(ast)
 			return Nil
 		end
 		function scope:SL(name, value)
-			local l = scope:GL(name)
-			if not l then
-				Error("Bad SL "..Tostring(name)) --Caused by self bad practices - can't be the result of bad input
-			end
-			l[1] = value
+			scope:GL(name)[1] = value
 		end
 		function scope:ML(name, value)
 			--create my own var
@@ -121,12 +117,7 @@ local function CreateExecutionLoop(ast)
 				return expr, True
 			else
 				if expr[2] then
-					local LocalDefinition = scope:GL(expr[0])
-					if not LocalDefinition then
-						Error("Expected '" .. Tostring(expr[0]) .. "' was missing") --Fault in the Parser or Executor
-					else
-						return LocalDefinition[1]
-					end
+					return scope:GL(expr[0])[1]
 				end
 				return FunctionEnvironment[expr[0]]
 			end
