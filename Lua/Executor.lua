@@ -109,11 +109,10 @@ local function CreateExecutionLoop(ast)
 				local ReturnData = executeStatList(expr[1], childScope)
 				if not ReturnData then --No return statement to handle
 					return
-				elseif ReturnData.T == 1 then --Get the return data
+				else--if ReturnData.T == 1 then --Get the return data
 					return SafeUnpack(ReturnData.D)
-				else --Uh oh!
-					local statement = ReturnData.T == 2 and "break" or "continue"
-					Error("Illegal attempt to "..statement.." the current scope")
+				--else --Uh oh!
+					--This else should not be needed as the parser now determines if this is valid behaviour
 				end
 			end
 
@@ -569,11 +568,10 @@ local function CreateExecutionLoop(ast)
 		local ReturnData = executeStatList(ast, CreateExecutionScope())
 		if not ReturnData then --No return statement to handle
 			return
-		elseif ReturnData.T == 1 then --Get the return data
+		else--if ReturnData.T == 1 then --Get the return data
 			return SafeUnpack(ReturnData.D)
-		else --Uh oh!
-			local statement = ReturnData.T == 2 and "break" or "continue"
-			Error("Illegal attempt to "..statement.." the current scope")
+		--else --Uh oh!
+			--This else should not be needed as the parser now determines if this is valid behaviour
 		end
 	end)
 end
