@@ -1,9 +1,9 @@
 local function CreateExecutionLoop(ast)
 
-	local stringsub, stringbyte, stringrep, stringchar
+	local stringsub,  stringbyte,  stringrep,  stringchar
 		= string.sub, string.byte, string.rep, string.char
 
-	local mathfloor, mathlog
+	local mathfloor,  mathlog
 		= math.floor, math.log
 
 	local Type, iPairs, Select, Unpack, Getfenv, Tonumber, Tostring, Assert

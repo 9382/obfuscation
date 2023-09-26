@@ -1375,14 +1375,15 @@ local bitmanager = (function()
 	function BaseBitWriter:ToString()
 		local final = ""
 		local Data = self.Data
+		local DataScanner = 1
 		while true do
-			local NextByte = "01" .. string.sub(Data,1,6)
+			local NextByte = "01" .. string.sub(Data,DataScanner,DataScanner+5)
 			if #NextByte < 8 then
 				final = final .. string.char(ToNum(padright(NextByte,8,"0")))
 				break
 			else
 				final = final .. string.char(ToNum(NextByte))
-				Data = string.sub(Data,7,-1)
+				DataScanner = DataScanner + 6
 			end
 		end
 		return final
@@ -1430,15 +1431,17 @@ local serializer = (function()
 				Output:WriteString(obj)
 				Output:Write(0,8) --Null terminator
 			elseif type(obj) == "number" then
-				if obj%1 == 0 and obj < 8 and obj >= 0 then
-					Output:Write(TYPE_NUMBER_SUPERBASIC,TYPE_WIDTH)
-					Output:Write(obj,3)
-				elseif obj%1 == 0 and obj < 32 and obj >= 0 then
-					Output:Write(TYPE_NUMBER_BASIC,TYPE_WIDTH)
-					Output:Write(obj,5)
-				elseif obj%1 == 0 and obj < 256 and obj >= 0 then
-					Output:Write(TYPE_NUMBER_SIMPLE,TYPE_WIDTH)
-					Output:Write(obj,8)
+				if obj%1 == 0 and obj >= 0 and obj < 256 then
+					if obj < 8 then
+						Output:Write(TYPE_NUMBER_SUPERBASIC,TYPE_WIDTH)
+						Output:Write(obj,3)
+					elseif obj < 32 then
+						Output:Write(TYPE_NUMBER_BASIC,TYPE_WIDTH)
+						Output:Write(obj,5)
+					else
+						Output:Write(TYPE_NUMBER_SIMPLE,TYPE_WIDTH)
+						Output:Write(obj,8)
+					end
 				else
 					Output:Write(TYPE_NUMBER,TYPE_WIDTH)
 					Output:WriteDouble(obj)
