@@ -1656,7 +1656,7 @@ local function deepModify(t, firstCall)
 	--Fake data
 	if math.random(1,12) == 1 and HasAstType then
 		--Do not add fake data if no AstType is present, as this could screw a Pairs check
-		for i = math.random(0,4),31 do
+		for i = math.random(0,1),5 do
 			if t[i] == nil then
 				t[i] = false
 				break
