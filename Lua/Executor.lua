@@ -345,8 +345,9 @@ local function CreateExecutionLoop(ast)
 			end
 
 		elseif AstType == 7 then
+			local subScope = CreateExecutionScope(scope)
 			repeat
-				local ReturnData = executeStatList(statement[1], CreateExecutionScope(scope))
+				local ReturnData = executeStatList(statement[1], subScope)
 				if ReturnData then
 					if ReturnData.T == 2 then --Break, get out
 						return
@@ -354,7 +355,7 @@ local function CreateExecutionLoop(ast)
 						return ReturnData --Return, propogate
 					end --Else: A continue, just keep going
 				end
-			until executeExpression(statement[0], scope)
+			until executeExpression(statement[0], subScope)
 
 		elseif AstType == 8 then
 			local out = {}

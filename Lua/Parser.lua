@@ -1067,7 +1067,7 @@ function ParseLua(src)
 				return false, GenerateError("`until` expected.")
 			end
 			--
-			local st, cond = ParseExpr(scope)
+			local st, cond = ParseExpr(body.Scope) --use the scope of the body
 			if not st then return false, cond end
 			--
 			local nodeRepeat = {}
