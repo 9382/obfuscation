@@ -476,7 +476,7 @@ local function CreateExecutionLoop(ast)
 			local BitData = ""
 			local function BufferSanityCheck(len)
 				for i = 1, mathfloor((len-#BitData-1)/6)+1 do
-					BitData = BitData .. stringsub(ToBit(stringbyte(x,BufferPoint,BufferPoint),8),3,-1)
+					BitData = BitData .. ToBit(stringbyte(x,BufferPoint,BufferPoint)%64,6)
 					BufferPoint = BufferPoint + 1
 				end
 			end
