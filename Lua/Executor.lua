@@ -449,8 +449,9 @@ local function CreateExecutionLoop(ast)
 				local pow = mathfloor(mathlog(n,2))
 				local final = ""
 				while pow >= 0 do
-					if n >= 2^pow then
-						n = n - 2^pow
+					local p2 = 2^pow
+					if n >= p2 then
+						n = n - p2
 						final = final .. "1"
 					else
 						final = final .. "0"
@@ -475,7 +476,7 @@ local function CreateExecutionLoop(ast)
 			local BufferPoint = 1
 			local BitData = ""
 			local function BufferSanityCheck(len)
-				for i = 1, mathfloor((len-#BitData-1)/6)+1 do
+				for i = 1, (len-#BitData-1)/6+1 do
 					BitData = BitData .. ToBit(stringbyte(x,BufferPoint,BufferPoint)%64,6)
 					BufferPoint = BufferPoint + 1
 				end
