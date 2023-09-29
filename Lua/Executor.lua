@@ -259,6 +259,8 @@ local function CreateExecutionLoop(ast)
 				local f = executeExpression(statement, scope)
 				if statement[4] then
 					scope:ML(name[0], f)
+				elseif name[2] then
+					scope:SL(name[0], f)
 				else
 					FunctionEnvironment[name[0]] = f
 				end
