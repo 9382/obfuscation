@@ -44,32 +44,28 @@ local function CreateExecutionLoop(ast)
 
 	local FunctionEnvironment = Getfenv()
 	local AmbiguityTracker = {}
-	local function HandleReturnAmbiguity(t,...)
-		--Doing this via a function gets around some of the confusion caused when using {...}
-		--This means select cant accidentally trim values inappropriately.
-
-		--Note that the response still has to be sent as a table and unpacked sooner or later
-		--For this reason, any table should rely on SafeUnpack instead of Unpack
-		--to avoid unreasonable early trimming of outputs
-
-		--This also automatically handles stupid truncation logic the way lua does it, E.g.
+	local function GetVarargsInfo(...)
+		return {...}, Select("#", ...)
+	end
+	local function EvaluateExpressionList(ExpressionList, Container, scope, startIndex)
+		--Evaluates expressions in a way that handles lua's value truncation, E.g.
 		---- < local a,b,c,d,e = (function()return 1,2,3,4,5 end)(), (function()return 3 end)(); print(a,b,c,d,e)
 		---- > 1 3 nil nil nil
-		local data = AmbiguityTracker[t] or {1,1}
-		--data[1] is data start point, data[2] is truncation end point
-		local dots = {...} --This is safe here, no panic needed
-		local iterateIndex = data[1]
-		local entries = Select("#",...)
-		if entries > 1 then
-			for i = iterateIndex,data[2] do --Truncate out old values
-				t[i] = Nil
-			end
+		local ELLength = #ExpressionList
+		if ELLength == 0 then
+			return 0
 		end
-		for i = 1, entries do --Push in new values
-			t[iterateIndex] = dots[i]
-			iterateIndex = iterateIndex + 1
+		--All non-last values are truncated
+		for i = 1,ELLength-1 do
+			Container[i] = executeExpression(ExpressionList[i], scope) --Auto-truncates
 		end
-		AmbiguityTracker[t] = {data[1]+1, iterateIndex}
+		--And the last one should give all of its values
+		local Out, OutLength = GetVarargsInfo(executeExpression(ExpressionList[ELLength], scope))
+		for i = 1,OutLength do
+			Container[ELLength+i-1] = Out[i]
+		end
+		AmbiguityTracker[Container] = {nil,ELLength+OutLength}
+		return ELLength+OutLength-1
 	end
 	local function SafeUnpack(t, dontClear) --Unpack while considering the real length of the table (see above)
 		local TData = AmbiguityTracker[t]
@@ -96,10 +92,12 @@ local function CreateExecutionLoop(ast)
 					end
 				end
 				if expr[3] then
+					local inputArgCount = Select("#", ...)
 					local varargs = {}
-					for i = #expr[2]+1, Select("#",...) do
-						HandleReturnAmbiguity(varargs, inputArgs[i])
+					for i = #expr[2]+1, inputArgCount do
+						varargs[#varargs+1] = inputArgs[i]
 					end
+					AmbiguityTracker[varargs] = {nil, inputArgCount-#expr[2]+1}
 					childScope:ML(-1, varargs) -- -1 is the reserved LocalID for local "..."
 				end
 				local ReturnData = executeStatList(expr[1], childScope)
@@ -152,12 +150,10 @@ local function CreateExecutionLoop(ast)
 		or     AstType == 6
 		or     AstType == 7 then
 			local args = {}
-			for _, arg in iPairs(expr[2]) do
-				if AstType == 6 then
-					args = {arg[0]}
-				else
-					HandleReturnAmbiguity(args, executeExpression(arg, scope))
-				end
+			if AstType == 6 then
+				args = {expr[2][1][0]}
+			else
+				EvaluateExpressionList(expr[2], args, scope)
 			end
 			return executeExpression(expr[0], scope)(SafeUnpack(args))
 
@@ -179,19 +175,18 @@ local function CreateExecutionLoop(ast)
 		elseif AstType == 13 then
 			local out = {}
 			--Process all key'd entries first
+			local unkeyed = {}
 			for _, entry in iPairs(expr[1]) do
 				if entry[2] == 0 then
 					out[executeExpression(entry[3], scope)] = executeExpression(entry[1], scope)
 				elseif entry[2] == 1 then
 					out[entry[3]] = executeExpression(entry[1], scope)
+				else--if entry[2] == 2 then
+					unkeyed[#unkeyed+1] = entry[1]
 				end
 			end
 			--And then do the unkey'd ones
-			for _, entry in iPairs(expr[1]) do
-				if entry[2] == 2 then
-					HandleReturnAmbiguity(out, executeExpression(entry[1], scope))
-				end
-			end
+			EvaluateExpressionList(unkeyed, out, scope)
 			return out
 
 		elseif AstType == 14 then
@@ -359,9 +354,7 @@ local function CreateExecutionLoop(ast)
 
 		elseif AstType == 8 then
 			local out = {}
-			for i = 1, #statement[0] do
-				HandleReturnAmbiguity(out, executeExpression(statement[0][i], scope))
-			end
+			EvaluateExpressionList(statement[0], out, scope)
 			for i = 1, #statement[1] do
 				local l = statement[1][i]
 				scope:ML(l[0], out[i])
@@ -369,9 +362,7 @@ local function CreateExecutionLoop(ast)
 
 		elseif AstType == 9 then
 			local arguments = {}
-			for _, arg in iPairs(statement[2]) do
-				HandleReturnAmbiguity(arguments, executeExpression(arg, scope))
-			end
+			EvaluateExpressionList(statement[2], arguments, scope)
 			return arguments
 
 		elseif AstType == 10 then
@@ -382,9 +373,7 @@ local function CreateExecutionLoop(ast)
 
 		elseif AstType == 12 then
 			local out = {}
-			for i = 1, #statement[0] do
-				HandleReturnAmbiguity(out, executeExpression(statement[0][i], scope))
-			end
+			EvaluateExpressionList(statement[0], out, scope)
 			for i = 1, #statement[1] do
 				local Lhs, wasExprExit = executeExpression(statement[1][i], scope, True)
 				local Rhs = out[i]
