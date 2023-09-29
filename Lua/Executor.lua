@@ -326,7 +326,7 @@ local function CreateExecutionLoop(ast)
 					break
 				end
 				--Define for-loop locals
-				for i = 1, #args do
+				for i = 1, #statement[2] do
 					childScope:ML(statement[2][i][0], args[i])
 				end
 				local ReturnData = executeStatList(statement[1], childScope)
