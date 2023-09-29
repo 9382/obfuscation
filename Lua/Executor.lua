@@ -6,8 +6,8 @@ local function CreateExecutionLoop(ast)
 	local mathfloor,  mathlog
 		= math.floor, math.log
 
-	local Type, iPairs, Select, Unpack, Getfenv, Tonumber, Tostring, Assert
-		= type, ipairs, select, unpack, getfenv, tonumber, tostring, assert
+	local Type, iPairs, Select, Unpack, Getfenv, Tonumber, Assert
+		= type, ipairs, select, unpack, getfenv, tonumber, assert
 
 	local True, False, Nil
 		= true, false, nil
