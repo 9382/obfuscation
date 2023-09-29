@@ -374,26 +374,30 @@ local function CreateExecutionLoop(ast)
 			return False --This too
 
 		elseif AstType == 12 then
-			local out = {}
-			EvaluateExpressionList(statement[0], out, scope)
+			local function ShouldFullyEvaluate(i)
+				if i == #statement[0] then
+					return executeExpression(statement[0][i], scope) --this being nil (i > #statement[0]), while messy, does actually behave correctly
+				else
+					return ({executeExpression(statement[0][i], scope)})[1]
+				end
+			end
 			for i = 1, #statement[1] do
 				local Lhs, wasExprExit = executeExpression(statement[1][i], scope, True)
-				local Rhs = out[i]
 				if wasExprExit then
 					if Lhs[5] == 2 then
 						if Lhs[2] then
-							scope:SL(Lhs[0], Rhs)
+							scope:SL(Lhs[0], ShouldFullyEvaluate(i))
 						else
-							FunctionEnvironment[Lhs[0]] = Rhs
+							FunctionEnvironment[Lhs[0]] = ShouldFullyEvaluate(i)
 						end
 
 					elseif Lhs[5] == 3 then
 						local Container = executeExpression(Lhs[0], scope)
-						Container[Lhs[1][0]] = Rhs
+						Container[Lhs[1][0]] = ShouldFullyEvaluate(i)
 
 					else--if Lhs[5] == 4 then
 						local Container = executeExpression(Lhs[0], scope)
-						Container[executeExpression(Lhs[1], scope)] = Rhs
+						Container[executeExpression(Lhs[1], scope)] = ShouldFullyEvaluate(i)
 
 					--It will always be one of the above types. If it's not, thats a serializer error
 					end
