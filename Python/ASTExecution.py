@@ -1,6 +1,4 @@
 import ast
-import asyncio
-import types
 
 _DEBUG = True
 def debugprint(*args, **kwargs):
@@ -267,7 +265,7 @@ def CreateExecutionLoop(code):
 	_DEBUG_LastExpr = None
 	_DEBUG_LastStatement = None
 
-	def _ExecuteExpression(expr, scope, *, ForcedContext=None):
+	def ExecuteExpression(expr, scope, *, ForcedContext=None):
 		nonlocal _DEBUG_LastExpr
 		_DEBUG_LastExpr = expr
 		exprType = type(expr)
@@ -449,9 +447,6 @@ def CreateExecutionLoop(code):
 					kwargs.update(value)
 			return func(*args, **kwargs)
 
-		# elif exprType == ast.Await:
-		# 	raise ExecutorException("Unimplemented")
-
 		elif exprType == ast.Lambda:
 			def LambdaHandler(args, kwargs):
 				subScope = VariableScope(scope, "lambda")
@@ -459,33 +454,8 @@ def CreateExecutionLoop(code):
 				return ExecuteExpression(expr.body, subScope)
 			return lambda *args, **kwargs : LambdaHandler(args, kwargs)
 
-		elif exprType == ast.Yield:
-			if expr.value:
-				yield ExecuteExpression(expr.value, scope)
-			else:
-				yield
-
-		elif exprType == ast.YieldFrom:
-			yield from ExecuteExpression(expr.value, scope)
-
 		else:
 			raise ExecutorException(f"[!] Unimplemented expression type {exprType}")
-
-	def ExecuteExpression(expr, *args, InformOnYield=False, **kwargs):
-		gen = _ExecuteExpression(expr, *args, **kwargs)
-		while True:
-			try:
-				out = next(gen)
-			except StopIteration as exc:
-				if InformOnYield:
-					return exc.value, False
-				else:
-					return exc.value
-			else:
-				if InformOnYield:
-					return out, True
-				else:
-					return out
 
 	def ExecuteStatement(statement, scope):
 		nonlocal _DEBUG_LastStatement
@@ -494,9 +464,16 @@ def CreateExecutionLoop(code):
 		debugprint("Executing statement...",stType)
 
 		if stType == ast.Expr:
-			out, wasYield = ExecuteExpression(statement.value, scope, InformOnYield=True)
-			if wasYield:
-				return ReturnStatement("Yield", out) #Yeah, bit bizzare :/
+			ExecuteExpression(statement.value, scope)
+
+		elif stType == ast.Delete:
+			for target in statement.targets:
+				if type(target) == ast.Attribute:
+					delattr(ExecuteExpression(target.value, scope), target.attr)
+				elif type(target) == ast.Subscript:
+					del ExecuteExpression(target.value, scope)[ExecuteExpression(target.slice, scope)]
+				else:
+					scope.deleteVar(ExecuteExpression(target, scope))
 
 		elif stType == ast.Assign or stType == ast.AnnAssign:
 			if stType == ast.Assign:
@@ -540,15 +517,6 @@ def CreateExecutionLoop(code):
 		elif stType == ast.Nonlocal:
 			for entry in statement.names:
 				scope.triggerNonlocal(entry)
-
-		elif stType == ast.Delete:
-			for target in statement.targets:
-				if type(target) == ast.Attribute:
-					delattr(ExecuteExpression(target.value, scope), target.attr)
-				elif type(target) == ast.Subscript:
-					del ExecuteExpression(target.value, scope)[ExecuteExpression(target.slice, scope)]
-				else:
-					scope.deleteVar(ExecuteExpression(target, scope))
 
 		elif stType == ast.Return:
 			if statement.value:
@@ -673,30 +641,15 @@ def CreateExecutionLoop(code):
 					scope.setVar(storedName or target, out)
 
 		elif stType == ast.FunctionDef:
-			if statement.yields:
-				def FunctionHandler(*args, **kwargs):
-					loadfrom = -1
-					subScope = VariableScope(scope, "function")
-					HandleArgAssignment(subScope, statement, args, kwargs)
-					while True:
-						out, loadfrom = ExecuteStatList(statement.body, subScope, loadfrom+1)
-						if out != None:
-							if out.Type == "Break" or out.Type == "Continue":
-								raise SyntaxError(f"'{out.Type}' outside loop")
-							elif out.Type == "Return":
-								return out.Data
-							elif out.Type == "Yield":
-								yield out.Data
-			else:
-				def FunctionHandler(*args, **kwargs):
-					subScope = VariableScope(scope, "function")
-					HandleArgAssignment(subScope, statement, args, kwargs)
-					out = ExecuteStatList(statement.body, subScope)
-					if out != None:
-						if out.Type == "Break" or out.Type == "Continue":
-							raise SyntaxError(f"'{out.Type}' outside loop")
-						else:
-							return out.Data
+			def FunctionHandler(*args, **kwargs):
+				subScope = VariableScope(scope, "function")
+				HandleArgAssignment(subScope, statement, args, kwargs)
+				out = ExecuteStatList(statement.body, subScope)
+				if out != None:
+					if out.Type == "Break" or out.Type == "Continue":
+						raise SyntaxError(f"'{out.Type}' outside loop")
+					else:
+						return out.Data
 			FunctionHandler.__name__ = statement.name
 			FunctionHandler.__qualname__ = statement.name #Technically a bit wrong but eh
 			FunctionHandler = ImplementObjectDecorators(FunctionHandler, statement.decorator_list, scope)
@@ -736,16 +689,11 @@ def CreateExecutionLoop(code):
 		else:
 			raise ExecutorException(f"[!] Unimplemented statement type {stType}")
 
-	def ExecuteStatList(statList, scope, loadfrom=None):
-		debugprint("Executing statement list...")
-		for i in range(loadfrom or 0, len(statList)):
-			statement = statList[i]
+	def ExecuteStatList(statList, scope):
+		for statement in statList:
 			out = ExecuteStatement(statement, scope)
 			if out != None: #Send off our return/break/continue statement
-				if loadfrom != None:
-					return out, i
-				else:
-					return out
+				return out
 
 	#Who doesn't love "for x,*y in z:" being a valid statement that you have to accomodate for!
 	def Assign(target, value, scope):
@@ -899,51 +847,8 @@ def CreateExecutionLoop(code):
 			return combinations
 		return RecursiveHandle(generators, 0)
 
-
 	#At this point we'd parse the AST if it was obfuscated. Obviously, here in our little testing place, it isn't
-	def CreateFinalCode(code):
-		#But what we do have to do is check for functions with a valid yield statement
-		#Step 1: Compile a list of functions
-
-		FunctionChain = []
-		def CalculateFunctionYields(ASTObject):
-			debugprint("Scanning", ASTObject)
-			NeedsCleanup = False
-
-			if type(ASTObject) == ast.FunctionDef:
-				debugprint("Condition passed for", ASTObject)
-				setattr(ASTObject, "yields", False)
-				FunctionChain.append(ASTObject)
-				NeedsCleanup = True
-
-			for value in ASTObject.__dict__.values():
-				if type(value) == ast.FunctionDef:
-					debugprint("Condition passed for", value)
-					setattr(value, "yields", False)
-					FunctionChain.append(value)
-					CalculateFunctionYields(value)
-					FunctionChain.remove(value)
-
-				elif type(value) == ast.Yield or type(value) == ast.YieldFrom:
-					if len(FunctionChain) == 0:
-						raise SyntaxError("'yield' outside function")
-					setattr(FunctionChain[len(FunctionChain)-1], "yields", True)
-					CalculateFunctionYields(value)
-
-				elif isinstance(value, ast.AST):
-					CalculateFunctionYields(value)
-
-				elif type(value) == list:
-					for item in value:
-						CalculateFunctionYields(item)
-
-			if NeedsCleanup:
-				FunctionChain.remove(ASTObject)
-		CalculateFunctionYields(code)
-		return code
-
-	finalCode = CreateFinalCode(code)
-
+	finalCode = code
 	def __main__():
 		scope = VariableScope(None, "core")
 		debugprint("Input code:",code)
@@ -1164,22 +1069,6 @@ for y in x:
 	print("fy",y)
 for y,*z in x.items():
 	print("fyz",y,z)
-""")
-
-testing = ast.parse(r"""
-def x():
-	print("Run a loop")
-	yield 3
-	print("Go again")
-	yield 5
-	return 8
-
-print("Get x")
-b = x()
-print("Out:",b)
-print("Next:",next(b))
-print("Next:",next(b))
-print("Next:",next(b))
 """)
 
 debugprint("AST Dump:",ast.dump(testing))
