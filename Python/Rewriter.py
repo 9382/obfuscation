@@ -209,39 +209,19 @@ def CreateExecutionLoop(code):
 		return randomStr
 
 	def WrapInQuotes(strobject):
-		# canDoDouble = True
-		# canDoSingle = True
-		# ignoreNext = False
-		# for char in strobject:
-		# 	if ignoreNext:
-		# 		ignoreNext = False
-		# 		continue
-		# 	if char == "\\":
-		# 		ignoreNext = True
-		# 	if char == '"':
-		# 		canDoDouble = False
-		# 	if char == "'":
-		# 		canDoSingle = False
-		# if canDoDouble:
-		# 	return f'"{strobject}"'
-		# elif canDoSingle:
-		# 	return f"'{strobject}'"
-		# else:
-		# 	return f'"""{strobject}"""' #Just hope
-
 		# TODO: Not convinced we are treating \ correctly
 		# Need to figure out how the input is treated and manage it accordingly
 		newString = ""
 		canDoDouble = True
 		ignoreNext = False
+		if '"' in strobject:
+			canDoDouble = False
 		for char in strobject:
-			if char == '"':
-				canDoDouble = False
 			if ignoreNext:
 				newString = newString + char
 				ignoreNext = False
 				continue
-			if char == '"' or char == "'":
+			if (canDoDouble and char == '"') or (not canDoDouble and char == "'"):
 				newString = newString + '\\' + char
 			else:
 				newString = newString + char
