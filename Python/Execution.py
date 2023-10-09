@@ -704,25 +704,27 @@ def CreateExecutionLoop(code):
 		elif type(target) == ast.Subscript:
 			ExecuteExpression(target.value, scope)[ExecuteExpression(target.slice, scope)] = value
 		elif type(target) == ast.Tuple or type(target) == ast.List:
-			if type(value) != tuple and type(value) != list:
+			if not hasattr(value, "__iter__"):
 				raise TypeError(f"cannot unpack non-iterable {type(value)} object")
+			iterator = value.__iter__()
 			for i in range(len(target.elts)):
 				item = target.elts[i]
 				if type(item) == ast.Starred:
 					offset = len(value)-len(target.elts)
 					for lower in range(i):
-						Assign(target.elts[lower], value[lower], scope)
-					scope.setVar(ExecuteExpression(item, scope), list(value[i:offset+i+1]))
+						Assign(target.elts[lower], iterator.__next__(), scope)
+					scope.setVar(ExecuteExpression(item, scope), [iterator.__next__() for i in range(i, offset+i+1)])
 					for upper in range(i+1,len(target.elts)):
-						Assign(target.elts[upper], value[upper+offset], scope)
+						Assign(target.elts[upper], iterator.__next__(), scope)
 					return
+			# No starred expression, do normal stuff
 			if len(target.elts) < len(value):
 				raise ValueError(f"not enough values to unpack (expected {len(target.elts)}, got {len(value)})")
 			elif len(target.elts) > len(value):
 				raise ValueError(f"too many values to unpack (expected {len(target.elts)})")
 			else:
 				for i in range(len(target.elts)):
-					Assign(target.elts[i], value[i], scope)
+					Assign(target.elts[i], iterator.__next__(), scope)
 		elif type(target) == ast.Starred:
 			raise SyntaxError("starred assignment target must be in a list or tuple")
 		else:
@@ -1069,6 +1071,25 @@ for y in x:
 	print("fy",y)
 for y,*z in x.items():
 	print("fyz",y,z)
+
+## Testing a rigourous implementation of Assign unpacking with non-standard types
+a, *b, c = "Testing"
+print(1, a, b, c)
+
+a, *b, c = [1,2,3,4,5]
+print(2, a, b, c)
+
+a, *b, c = (1,2,3,4,5)
+print(3, a, b, c)
+
+a, *b, c = {1,2,3,4,5}
+print(4, a, b, c)
+
+a, *b, c = {1:2,3:4,5:6,7:8,9:10}
+print(5, a, b, c)
+
+x, y, z = {1:2, 4:5, 7:8}
+print(x, y, z)
 """)
 
 debugprint("AST Dump:",ast.dump(testing))
