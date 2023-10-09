@@ -95,63 +95,7 @@ The issue with yield: Yield has to be able to basically "kill" a function upon h
 The key thing to note here is that yield is an expression. This makes a statement like "a = yield 5" valid, and that's a complete nightmare for us.
 """
 
-def r_asyncio_run(main, *, debug=None):
-	from asyncio import coroutines
-	from asyncio import events
-	from asyncio import tasks
-	def _cancel_all_tasks(loop):
-		to_cancel = tasks.all_tasks(loop)
-		if not to_cancel:
-			return
-
-		for task in to_cancel:
-			task.cancel()
-
-		loop.run_until_complete(
-			tasks.gather(*to_cancel, loop=loop, return_exceptions=True))
-
-		for task in to_cancel:
-			if task.cancelled():
-				continue
-			if task.exception() is not None:
-				loop.call_exception_handler({
-					'message': 'unhandled exception during asyncio.run() shutdown',
-					'exception': task.exception(),
-					'task': task,
-				})
-
-	# if events._get_running_loop() is not None:
-	# 	raise RuntimeError(
-	# 		"asyncio.run() cannot be called from a running event loop")
-
-	if not coroutines.iscoroutine(main):
-		raise ValueError("a coroutine was expected, got {!r}".format(main))
-
-	loop = events.new_event_loop()
-	try:
-		events.set_event_loop(loop)
-		if debug is not None:
-			loop.set_debug(debug)
-		return loop.run_until_complete(main)
-	finally:
-		try:
-			_cancel_all_tasks(loop)
-			loop.run_until_complete(loop.shutdown_asyncgens())
-		finally:
-			events.set_event_loop(None)
-			loop.close()
-
 def CreateExecutionLoop(code):
-	def qyieldfrom(x):
-		def subtask(b):
-			yield from b
-		gen = subtask(x)
-		while True:
-			try:
-				out = next(gen)
-			except StopIteration:
-				return
-
 	import builtins
 	class VariableScope:
 		def __init__(self, Parent, scopeType):
@@ -505,85 +449,8 @@ def CreateExecutionLoop(code):
 					kwargs.update(value)
 			return func(*args, **kwargs)
 
-		elif exprType == ast.Await:
-			try:
-				MainLoop = asyncio.get_running_loop()
-			except RuntimeError:
-				raise SyntaxError("'await' outside async function")
-			MainLoop.set_debug(True)
-			debugprint("MainLoop=",MainLoop)
-			coroutine = ExecuteExpression(expr.value, scope)
-
-			## Method 1: Attempt to append to the existing loop (this just straight up doesn't work / barely works)
-			"""
-			NewLoop = asyncio.new_event_loop()
-			test = MainLoop.get_task_factory()
-			final = None
-			canPass = False
-			def callback(out):
-				nonlocal final
-				nonlocal canPass
-				debugprint("Oh?", out)
-				final = out
-				canPass = True
-			out = NewLoop.call_soon(coroutine, callback)
-			debugprint("out=", out)
-			while not canPass:
-				pass
-			return out
-			"""
-
-			## Method 2: Use the coroutine.send method. This generates quite a few runtime warnings and blocking functions and returns arent respected
-			"""
-			try:
-				coroutine = ExecuteExpression(expr.value, scope)
-				feedback = None
-				while True:
-					feedback = coroutine.send(feedback)
-					debugprint("New feedback:",feedback,type(feedback))
-					# Note: If we dont have the below return
-					return feedback
-			except StopIteration:
-				debugprint("Exited await")
-				pass
-			"""
-
-			## Method 3: Fire the async function using `yield from` (inspired by PEP 492) - This is the closest solution I've seen yet,
-			## but returning values and blocking functions still aren't respected. Barely better than Method 2
-			"""
-			@types.coroutine
-			def intercept(x):
-				yield from x
-			gen = intercept(coroutine)
-			while True:
-				try:
-					out = next(gen)
-				except StopIteration:
-					debugprint("Got a StopIteration")
-					return None
-				else:
-					debugprint("No StopIteration! out=", out)
-					# if isinstance(out, asyncio.Future):
-					# 	getMoving = False
-					# 	while not getMoving:
-					# 		b = intercept(out)
-					# 		try:
-					# 			next(b)
-					# 		except StopIteration:
-					# 			getMoving = True
-					return out
-					# If we don't return out here, we run into an issue later (that is definitely our fault anyways)
-			return out
-			"""
-
-			## This yields too hard and completely freezes, uh, everything. :/
-			# future = asyncio.run_coroutine_threadsafe(coroutine, MainLoop)
-			# debugprint("made future", future)
-			# result = future.result()
-			# debugprint("got result", result)
-			# return result
-			return r_asyncio_run(coroutine)
-
+		# elif exprType == ast.Await:
+		# 	raise ExecutorException("Unimplemented")
 
 		elif exprType == ast.Lambda:
 			def LambdaHandler(args, kwargs):
@@ -1300,37 +1167,20 @@ for y,*z in x.items():
 """)
 
 testing = ast.parse(r"""
-import asyncio
+def x():
+	print("Run a loop")
+	yield 3
+	print("Go again")
+	yield 5
+	return 8
 
-async def test2(a):
-	print("T2",a)
-	await asyncio.sleep(1)
-	print("Done!")
-	return a
-
-async def test(a):
-	print("Async run",a)
-	return await test2(a)
-
-final = asyncio.run(test(5))
-print("Final=",final)
+print("Get x")
+b = x()
+print("Out:",b)
+print("Next:",next(b))
+print("Next:",next(b))
+print("Next:",next(b))
 """)
-
-# testing = ast.parse(r"""
-# def x():
-# 	print("Run a loop")
-# 	yield 3
-# 	print("Go again")
-# 	yield 5
-# 	return 8
-
-# print("Get x")
-# b = x()
-# print("Out:",b)
-# print("Next:",next(b))
-# print("Next:",next(b))
-# print("Next:",next(b))
-# """)
 
 debugprint("AST Dump:",ast.dump(testing))
 
