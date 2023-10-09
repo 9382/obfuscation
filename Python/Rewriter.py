@@ -127,21 +127,21 @@ def CreateExecutionLoop(code):
 			self.Globals = set()
 			self.NonLocals = set()
 			self.VarMapping = {}
-		def getVar(self, var, internal=False):
-			out = self._getVar(var)
-			if not internal and type(out) == tuple:
+		def getVar(self, var, *, fromChild=False):
+			out = self._getVar(var, fromChild=fromChild)
+			if not fromChild and type(out) == tuple:
 				return out[0]
 			else:
 				return out
-		def _getVar(self, var):
+		def _getVar(self, var, *, fromChild=False):
 			debugprint("Asked to retrieve variable",var)
 			# The order of this is very messy, changes a lot, and is mostly guess work
 			# But, uh, this makes sense, right?
-			if self.scopeType == "class":
+			if self.scopeType == "class" and not fromChild:
 				return var, True
 			if self.Parent:
 				#damn import *
-				newVar, exists = self.Parent.getVar(var, True)
+				newVar, exists = self.Parent.getVar(var, fromChild=True)
 				if exists:
 					return newVar, True
 			if var in self.VarMapping:
