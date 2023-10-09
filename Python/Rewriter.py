@@ -139,14 +139,14 @@ def CreateExecutionLoop(code):
 			# But, uh, this makes sense, right?
 			if self.scopeType == "class" and not fromChild:
 				return var, True
+			if var in self.VarMapping:
+				return self.VarMapping[var], True
 			if self.Parent:
 				#damn import *
 				newVar, exists = self.Parent.getVar(var, fromChild=True)
 				if exists:
 					return newVar, True
-			if var in self.VarMapping:
-				return self.VarMapping[var], True
-			elif hasattr(builtins, var):
+			if hasattr(builtins, var):
 				return var, True
 			else:
 				return var, False
@@ -177,14 +177,14 @@ def CreateExecutionLoop(code):
 					#The nonlocal and global state will persist beyond deletion, so DONT clear those
 					self.Parent.deleteVar(var)
 		def triggerGlobal(self, var):
-			self.VarMapping[var] = var #Dont obscure globals
 			if self.scopeType != "core":
+				self.VarMapping[var] = self.Parent.getVar(var)
 				self.Globals.add(var)
 				self.Parent.triggerGlobal(var)
 		def triggerNonlocal(self, var):
 			if self.scopeType == "core":
 				raise SyntaxError("nonlocal declaration not allowed at module level")
-			self.VarMapping[var] = var #Dont obscure nonlocals. Not required, just safer
+			self.VarMapping[var] = self.Parent.getVar(var)
 			self.NonLocals.add(var)
 
 	class ReturnStatement:
@@ -731,6 +731,9 @@ def CreateExecutionLoop(code):
 	def ExecuteStatList(statList, scope, Indent=True):
 		debugprint("Executing statement list...")
 		compiledText = []
+		for statement in statList:
+			if type(statement) in [ast.FunctionDef, ast.AsyncFunctionDef]:
+				scope.createVar(statement.name)
 		for statement in statList:
 			if OPTION_insert_junk and random.randint(1,4) == 1:
 				out = ExecuteStatement(GenerateRandomJunk(), scope)
