@@ -537,8 +537,8 @@ def CreateExecutionLoop(code):
 			return ExecuteExpression(statement.value, scope)
 
 		elif stType == ast.Assign:
-			target = ", ".join([ExecuteExpression(t, scope) for t in statement.targets])
 			value = ExecuteExpression(statement.value, scope)
+			target = ", ".join([ExecuteExpression(t, scope) for t in statement.targets])
 			return f"{target} = {value}"
 
 		elif stType == ast.AnnAssign:
