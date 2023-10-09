@@ -806,7 +806,8 @@ def CreateExecutionLoop(code):
 			out = ""
 			if generator.is_async:
 				out += f"async "
-			out += f"for {ExecuteExpression(generator.target, scope)} in {ExecuteExpression(generator.iter, scope)}"
+			generationTarget = ExecuteExpression(generator.iter, scope)
+			out += f"for {ExecuteExpression(generator.target, scope)} in {generationTarget}"
 			for conditional in generator.ifs:
 				out += f" if {ExecuteExpression(conditional, scope)}"
 			terms.append(out)
