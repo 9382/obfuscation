@@ -150,13 +150,13 @@ def CreateExecutionLoop(code):
 				return var, True
 			else:
 				return var, False
-		def createVar(self, var):
+		def createVar(self, var, forceNormal=False):
 			if not OPTION_obscure_variables:
 				return str(var)
 			else:
 				if var in self.VarMapping:
 					return self.VarMapping[var]
-				elif hasattr(builtins, var):
+				elif hasattr(builtins, var) or forceNormal:
 					self.VarMapping[var] = var
 					return var
 				else:
@@ -769,12 +769,12 @@ def CreateExecutionLoop(code):
 			arg = arguments.args[i]
 			if i >= defaultOffset:
 				default = ExecuteExpression(arguments.defaults[i-defaultOffset], scope)
-				argString.append(f"{scope.getVar(arg.arg)}={default}")
+				argString.append(f"{scope.createVar(arg.arg, forceNormal=True)}={default}")
 			else:
-				argString.append(f"{scope.getVar(arg.arg)}")
+				argString.append(f"{scope.createVar(arg.arg, forceNormal=True)}")
 
 		if arguments.vararg:
-			argString.append(f"*{scope.getVar(arguments.vararg.arg)}")
+			argString.append(f"*{scope.createVar(arguments.vararg.arg, forceNormal=True)}")
 		elif len(arguments.kwonlyargs) > 0:
 			argString.append("*")
 
@@ -783,12 +783,12 @@ def CreateExecutionLoop(code):
 			kwarg, default = arguments.kwonlyargs[i].arg, arguments.kw_defaults[i]
 			if default:
 				default = ExecuteExpression(default, scope)
-				argString.append(f"{scope.getVar(kwarg)}={default}")
+				argString.append(f"{scope.createVar(kwarg, forceNormal=True)}={default}")
 			else:
-				argString.append(f"{scope.getVar(kwarg)}")
+				argString.append(f"{scope.createVar(kwarg, forceNormal=True)}")
 
 		if arguments.kwarg:
-			argString.append(f"**{scope.getVar(arguments.kwarg.arg)}")
+			argString.append(f"**{scope.createVar(arguments.kwarg.arg, forceNormal=True)}")
 
 		return ", ".join(argString)
 
