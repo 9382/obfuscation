@@ -831,13 +831,13 @@ def CreateExecutionLoop(code):
 		"""
 		def RecursiveHandle(generators, i):
 			gen = generators[i]
-			iterator = ExecuteExpression(gen[2], scope)
-			storage = ExecuteExpression(gen[1], scope)
+			iterator = ExecuteExpression(gen[1], scope)
+			storage = ExecuteExpression(gen[0], scope)
 			combinations = []
 			for term in iterator:
 				scope.setVar(storage, term)
 				ShouldEvaluate = True
-				for condition in gen[3]:
+				for condition in gen[2]:
 					if not ExecuteExpression(condition, scope):
 						ShouldEvaluate = False
 						break
