@@ -23,6 +23,9 @@ OPTION_obscure_variables = True
 # Same as obscure_variables, but instead uses as few characters as it can. Same limitations/issues apply (UNIMPLEMENTED)
 OPTION_minimise_variables = False
 
+# Enables obscuring of positional arguments. Don't use if positional arguments are sometimes directly referenced, as this may cause errors
+OPTION_obscure_posargs = True
+
 # Occassionally inserts a bit of garbage (code that does, quite literally, nothing)
 OPTION_insert_junk = True
 
@@ -769,12 +772,12 @@ def CreateExecutionLoop(code):
 			arg = arguments.args[i]
 			if i >= defaultOffset:
 				default = ExecuteExpression(arguments.defaults[i-defaultOffset], scope)
-				argString.append(f"{scope.createVar(arg.arg, forceNormal=True)}={default}")
+				argString.append(f"{scope.createVar(arg.arg, forceNormal=not OPTION_obscure_posargs)}={default}")
 			else:
-				argString.append(f"{scope.createVar(arg.arg, forceNormal=True)}")
+				argString.append(f"{scope.createVar(arg.arg, forceNormal=not OPTION_obscure_posargs)}")
 
 		if arguments.vararg:
-			argString.append(f"*{scope.createVar(arguments.vararg.arg, forceNormal=True)}")
+			argString.append(f"*{scope.createVar(arguments.vararg.arg, forceNormal=not OPTION_obscure_posargs)}")
 		elif len(arguments.kwonlyargs) > 0:
 			argString.append("*")
 
