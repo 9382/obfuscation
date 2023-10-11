@@ -112,6 +112,9 @@ Operators = [
 	ast.IsNot,
 	ast.In,
 	ast.NotIn,
+	# BoolOp (not used directly in ParseOperator)
+	ast.And,
+	ast.Or,
 ]
 
 UntypedTypes = [
