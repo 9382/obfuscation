@@ -747,37 +747,37 @@ def CreateExecutionLoop(code):
 		#Setup
 		assignedNames = {}
 		wantedPositionals = {}
-		for pa in astArgs[2]:
-			wantedPositionals[pa[1]] = True
+		for pa in astArgs[1]:
+			wantedPositionals[pa[0]] = True
 		wantedKeywords = {}
-		for kwa in astArgs[4]:
-			wantedKeywords[kwa[1]] = True
+		for kwa in astArgs[3]:
+			wantedKeywords[kwa[0]] = True
 
 		posargCollector = []
 		kwargCollector = {}
 
 		#Positional defaults
-		defaultOffset = len(astArgs[2])-len(astArgs[7])
-		for i in range(len(astArgs[7])):
-			scope.setVar(astArgs[2][i+defaultOffset][1], ExecuteExpression(astArgs[7][i], scope.Parent))
-			wantedPositionals[astArgs[2][i+defaultOffset][1]] = False
+		defaultOffset = len(astArgs[1])-len(astArgs[6])
+		for i in range(len(astArgs[6])):
+			scope.setVar(astArgs[1][i+defaultOffset][0], ExecuteExpression(astArgs[6][i], scope.Parent))
+			wantedPositionals[astArgs[1][i+defaultOffset][0]] = False
 
 		#Input positionals
 		for i in range(len(args)):
-			if i < len(astArgs[2]):
-				scope.setVar(astArgs[2][i][1], args[i])
-				assignedNames[astArgs[2][i][1]] = True
-				wantedPositionals[astArgs[2][i][1]] = False
+			if i < len(astArgs[1]):
+				scope.setVar(astArgs[1][i][0], args[i])
+				assignedNames[astArgs[1][i][0]] = True
+				wantedPositionals[astArgs[1][i][0]] = False
 			else:
 				posargCollector.append(args[i])
 
 		#kwarg defaults
-		for i in range(len(astArgs[5])):
-			default = astArgs[5][i]
+		for i in range(len(astArgs[4])):
+			default = astArgs[4][i]
 			if default != None:
-				kw = astArgs[4][i]
-				scope.setVar(kw[1], ExecuteExpression(default, scope.Parent))
-				wantedKeywords[kw[1]] = False
+				kw = astArgs[3][i]
+				scope.setVar(kw[0], ExecuteExpression(default, scope.Parent))
+				wantedKeywords[kw[0]] = False
 
 		#Input kwargs
 		for key, value in kwargs.items():
@@ -807,12 +807,12 @@ def CreateExecutionLoop(code):
 				missing.append(key)
 		if len(missing) > 0:
 			raise TypeError(f"{representation}() missing {len(missing)} required keyword-only {GoodGrammar(missing, 'argument:', 'arguments:')}")
-		if astArgs[3]:
-			scope.setVar(astArgs[3][1], posargCollector)
+		if astArgs[2]:
+			scope.setVar(astArgs[2][0], posargCollector)
 		elif len(posargCollector) > 0:
 			raise TypeError(f"{representation}() received too many positional arguments")
-		if astArgs[6]:
-			scope.setVar(astArgs[6][1], kwargCollector)
+		if astArgs[5]:
+			scope.setVar(astArgs[5][0], kwargCollector)
 		elif len(kwargCollector) > 0:
 			raise TypeError(f"{representation}() received too many keyword arguments")
 
