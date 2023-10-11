@@ -2,20 +2,20 @@ import math
 import ast
 
 Statements = [
-	ast.FunctionDef,
+	ast.FunctionDef, # 0
 	ast.AsyncFunctionDef,
 	ast.ClassDef,
 	ast.Return,
 
 	ast.Delete,
-	ast.Assign,
+	ast.Assign, # 5
 	ast.AugAssign,
 	ast.AnnAssign,
 
 	ast.For,
 	# ast.AsyncFor, # Unimplemented!
 	ast.While,
-	ast.If,
+	ast.If, # 10
 	ast.With,
 	# ast.AsyncWith, # Unimplemented!
 
@@ -25,29 +25,29 @@ Statements = [
 
 	#ast.Match, # Unimplemented!
 
-	ast.Import,
+	ast.Import, # 15
 	ast.ImportFrom,
 
 	ast.Global,
 	ast.Nonlocal,
 	ast.Expr,
-	ast.Pass,
+	ast.Pass, # 20
 	ast.Break,
 	ast.Continue,
 ]
 
 Expressions = [
-	ast.BoolOp,
+	ast.BoolOp, # 0
 	ast.NamedExpr,
 	ast.BinOp,
 	ast.UnaryOp,
 	ast.Lambda,
-	ast.IfExp,
+	ast.IfExp, # 5
 	ast.Dict,
 	ast.Set,
 	ast.ListComp,
 	ast.SetComp,
-	ast.DictComp,
+	ast.DictComp, # 10
 	ast.GeneratorExp,
 
 	# ast.Await, # Unimplemented!
@@ -57,13 +57,13 @@ Expressions = [
 	ast.Compare,
 	ast.Call,
 	ast.FormattedValue,
-	ast.JoinedStr,
+	ast.JoinedStr, # 15
 	ast.Constant,
 
 	ast.Attribute,
 	ast.Subscript,
 	ast.Starred,
-	ast.Name,
+	ast.Name, # 20
 	ast.List,
 	ast.Tuple,
 
@@ -72,8 +72,10 @@ Expressions = [
 	# ast.ExtSlice, # Unimplemented!
 
 	# Not strictly expressions but who cares
-	ast.keyword,
+	ast.keyword, # 25
+]
 
+Contexts = [
 	ast.Load,
 	ast.Store,
 	ast.Del,
@@ -120,10 +122,12 @@ UntypedTypes = [
 
 StatementToID = {}
 ExpressionToID = {}
+ContextToID = {}
 OperatorToID = {}
 for itemList, referenceList, name in [
 	[Statements, StatementToID, "statement"],
 	[Expressions, ExpressionToID, "expression"],
+	[Contexts, ContextToID, "context"],
 	[Operators, OperatorToID, "operator"]]:
 	i = 0
 	for item in itemList:
@@ -263,6 +267,8 @@ def simplify(Object):
 			out.append(ExpressionToID[objtype])
 		elif objtype in Statements:
 			out.append(StatementToID[objtype])
+		elif objtype in Contexts:
+			out.append(ContextToID[objtype])
 		elif objtype in Operators:
 			out.append(OperatorToID[objtype])
 		elif objtype in UntypedTypes:
