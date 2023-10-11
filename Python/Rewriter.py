@@ -363,9 +363,10 @@ def CreateExecutionLoop(code):
 		elif exprType == ast.JoinedStr:
 			out = "".join(ExecuteExpression(value, scope, ShouldWrap=False) for value in expr.values)
 			if ShouldWrap:
-				return f"f{WrapInQuotes(out)}"
-			else:
-				return out
+				out = f"f{WrapInQuotes(out)}"
+				if OPTION_insert_junk:
+					out = out + "[::]"
+			return out
 
 		elif exprType == ast.FormattedValue:
 			value = ExecuteExpression(expr.value, scope)
@@ -823,7 +824,12 @@ def CreateExecutionLoop(code):
 		lambda: ast.If(
 			test=ast.NamedExpr(target=ast.Name(id=GenerateRandomStr(),ctx=ast.Store()),value=ast.Constant(value=0)),
 			body=[ast.Expr(value=ast.Call(func=ast.Name(id=GenerateRandomStr(),ctx=ast.Store()),args=[],keywords=[]))],orelse=[]
-		)
+		),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.Constant(value=random.random())),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.Constant(value=random.randint(-10,10))),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.Constant(value="")),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.List(elts=[],ctx=ast.Load())),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.Dict(keys=[],values=[])),
 	]
 	def GenerateRandomJunk():
 		return random.choice(JunkLines)()
