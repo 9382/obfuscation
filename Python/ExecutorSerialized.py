@@ -362,7 +362,10 @@ def CreateExecutionLoop(code):
 			elif exprType == 9:
 				return {x[0] for x in out}
 			elif exprType == 11:
-				return (x[0] for x in out)
+				gen = (x[0] for x in out)
+				gen.__name__ = "<genexpr>"
+				gen.__qualname__ = "<genexpr>"
+				return gen
 
 		elif exprType == 10:
 			subScope = VariableScope(scope, "generator")
