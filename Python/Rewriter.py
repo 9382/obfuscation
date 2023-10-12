@@ -133,17 +133,22 @@ def CreateExecutionLoop(code):
 			self.Globals = set()
 			self.NonLocals = set()
 			self.VarMapping = {}
-		def getVar(self, var, *, fromChild=False):
-			out = self._getVar(var, fromChild=fromChild)
+		def getVar(self, var, *, fromChild=False, getFromCore=False):
+			out = self._getVar(var, fromChild=fromChild, getFromCore=getFromCore)
 			if not fromChild and type(out) == tuple:
 				return out[0]
 			else:
 				return out
-		def _getVar(self, var, *, fromChild=False):
-			debugprint("Asked to retrieve variable",var)
+		def _getVar(self, var, *, fromChild, getFromCore):
+			debugprint("Asked to retrieve variable",var,self.VarMapping)
 			# The order of this is very messy, changes a lot, and is mostly guess work
 			# But, uh, this makes sense, right?
-			if self.scopeType == "class" and not fromChild:
+			if getFromCore:
+				if self.scopeType != "core":
+					return self.Parent.getVar(var, getFromCore=True)
+				else:
+					return self.createVar(var)
+			if self.scopeType == "class" and not fromChild and var not in self.NonLocals and var not in self.Globals:
 				return var, True
 			if var in self.VarMapping:
 				return self.VarMapping[var], True
@@ -184,14 +189,16 @@ def CreateExecutionLoop(code):
 					self.Parent.deleteVar(var)
 		def triggerGlobal(self, var):
 			if self.scopeType != "core":
-				self.VarMapping[var] = self.Parent.getVar(var)
-				self.Globals.add(var)
+				if var not in self.Globals:
+					self.VarMapping[var] = self.Parent.getVar(var, getFromCore=True)
+					self.Globals.add(var)
 				self.Parent.triggerGlobal(var)
 		def triggerNonlocal(self, var):
 			if self.scopeType == "core":
 				raise SyntaxError("nonlocal declaration not allowed at module level")
-			self.VarMapping[var] = self.Parent.getVar(var)
-			self.NonLocals.add(var)
+			if var not in self.NonLocals:
+				self.VarMapping[var] = self.Parent.getVar(var)
+				self.NonLocals.add(var)
 
 	class ReturnStatement:
 		def __init__(self, Type, Data=None):
@@ -717,10 +724,7 @@ def CreateExecutionLoop(code):
 			subScope = VariableScope(scope, "function")
 			out = []
 			decorators = ImplementObjectDecorators(statement.decorator_list, scope)
-			if scope.scopeType == "class":
-				name = statement.name
-			else:
-				name = scope.createVar(statement.name)
+			name = scope.createVar(statement.name)
 			args = HandleArgs(subScope, statement.args)
 			body = ExecuteStatList(statement.body, subScope)
 			out.extend(decorators)
@@ -758,6 +762,8 @@ def CreateExecutionLoop(code):
 		for statement in statList:
 			if type(statement) in [ast.FunctionDef, ast.AsyncFunctionDef]:
 				scope.createVar(statement.name)
+			elif type(statement) in [ast.Global, ast.Nonlocal]:
+				ExecuteStatement(statement, scope)
 		for statement in statList:
 			if OPTION_insert_junk and random.randint(1,4) == 1:
 				out = ExecuteStatement(GenerateRandomJunk(), scope)
@@ -906,5 +912,5 @@ else:
 	out = CreateExecutionLoop(testing)
 	debugprint("Executing execution loop")
 	finalText = out()
+	open("_Rewriter_output.py","w",encoding="utf-8").write(finalText)
 	debugprint("Finished execution loop")
-
