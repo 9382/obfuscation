@@ -21,7 +21,7 @@ OPTION_obscure_numbers = False
 OPTION_obscure_variables = True
 
 # Same as obscure_variables, but instead uses as few characters as it can. Same limitations/issues apply (UNIMPLEMENTED)
-OPTION_minimise_variables = False
+OPTION_minimise_variables = True
 
 # Enables obscuring of positional arguments. Don't use if positional arguments are sometimes directly referenced, as this may cause errors
 OPTION_obscure_posargs = True
@@ -203,7 +203,22 @@ def CreateExecutionLoop(code):
 		_RandomCharacters.append(chr(i))
 	for i in range(97, 123):
 		_RandomCharacters.append(chr(i))
+	lastVar = []
+	def GenerateSmallestStr():
+		nonlocal lastVar
+		for i in range(len(lastVar)-1, -1, -1):
+			if lastVar[i] != len(_RandomCharacters)-1:
+				lastVar[i] = lastVar[i] + 1
+				out = str().join(_RandomCharacters[c] for c in lastVar)
+				if out in ["if", "do", "in", "as"]:
+					return GenerateSmallestStr() #just be a bit careful
+			else:
+				lastVar[i] = 0
+		lastVar = [0] * (len(lastVar)+1)
+		return _RandomCharacters[0] * len(lastVar)
 	def GenerateRandomStr(length=None):
+		if OPTION_minimise_variables:
+			return GenerateSmallestStr()
 		if not length:
 			length = random.randint(20,40)
 		randomStr = ""
