@@ -1,3 +1,4 @@
+import builtins
 import math
 import ast
 
@@ -121,6 +122,8 @@ UntypedTypes = [
 	ast.Module,
 	ast.arguments,
 	ast.alias,
+	ast.arg,
+	ast.comprehension,
 ]
 
 StatementToID = {}
@@ -222,7 +225,6 @@ class BitWriter:
 			print("[bitmanager] Precision lost during handling of double, missing", 52-len(NormalizedBits), "bits\nFractional:", fractional)
 			NormalizedBits = padright(NormalizedBits,52,"0")
 		Exponent = ToBit(Exponent+1023,11)
-		print("sign",sign,"Exponent",Exponent,"Normalized",NormalizedBits)
 		self.Data = self.Data + sign + Exponent + NormalizedBits
 	def ToString(self):
 		final = ""
@@ -402,7 +404,7 @@ def deserialize(bitdata):
 	return deserializeloop()
 
 c = ast.parse(open("TestCode.py", "r", encoding="utf-8").read())
-print(ast.dump(c))
+# print(ast.dump(c))
 
 simple_original = simplify(c)
 encoded = serialize(simple_original)
@@ -411,3 +413,4 @@ decoded = deserialize(encoded)
 print("ORIGINAL", simple_original)
 print("DECODED ", decoded)
 print("RAW DATA", encoded)
+open("Serializer_output.txt", "w").write(encoded)
