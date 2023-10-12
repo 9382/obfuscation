@@ -88,16 +88,16 @@ print("IfExp1", 1 if True else 2 if True else 3 if True else 4)
 print("IfExp2", 1 if True else 2 if False else 3 if True else 4)
 print("IfExp3", (1 if True else 2) if False else (3 if True else 4))
 
-## Testing a with clause (makes file so leaving commented)
-# try:
-#	 with open("with.txt","w") as f:
-#		 print("Closed?",f.closed)
-#		 print("file",f)
-#		 f.write("Test text")
-#		 f.dfsajasfjh()
-# except:
-#	 print("Ignoring intentional fail")
-# print("Closed?",f.closed)
+## Testing a with clause (makes files)
+try:
+	 with open("with.txt","w") as f:
+		 print("Closed?",f.closed)
+		 print("file",f)
+		 f.write("Test text")
+		 f.dfsajasfjh()
+except:
+	 print("Ignoring intentional fail")
+print("Closed?",f.closed)
 
 ## Testing starred expressions in function calls
 x = [2,3,4]
