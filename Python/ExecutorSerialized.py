@@ -277,7 +277,7 @@ def CreateExecutionLoop(code):
 			return expr[1]
 
 		elif exprType == 20:
-			ctx = ForcedContext or expr[2][0]
+			ctx = ForcedContext if ForcedContext != None else expr[2][0]
 			if ctx == 0:
 				return scope.getVar(expr[1])
 			elif ctx == 1:
@@ -293,7 +293,7 @@ def CreateExecutionLoop(code):
 			return value
 
 		elif exprType == 19:
-			ctx = ForcedContext or expr[2][0]
+			ctx = ForcedContext if ForcedContext != None else expr[2][0]
 			if ctx == 0:
 				return ExecuteExpression(expr[1], scope)
 			elif ctx == 1:
@@ -302,7 +302,7 @@ def CreateExecutionLoop(code):
 				raise ExecutorException("Direct call to evaluate a Starred del expression")
 
 		elif exprType == 17:
-			ctx = ForcedContext or expr[3][0]
+			ctx = ForcedContext if ForcedContext != None else expr[3][0]
 			if ctx == 0:
 				return getattr(ExecuteExpression(expr[1], scope), expr[2])
 			elif ctx == 1:
@@ -380,7 +380,7 @@ def CreateExecutionLoop(code):
 			return slice(lower, upper, step)
 
 		elif exprType == 18:
-			ctx = ForcedContext or expr[3][0]
+			ctx = ForcedContext if ForcedContext != None else expr[3][0]
 			if ctx == 0:
 				value = ExecuteExpression(expr[1], scope)
 				Slice = ExecuteExpression(expr[2], scope)
