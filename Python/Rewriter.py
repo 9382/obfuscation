@@ -20,7 +20,7 @@ OPTION_obscure_numbers = False
 # Does not currently respect __all__ exports, and will rename them
 OPTION_obscure_variables = True
 
-# Same as obscure_variables, but instead uses as few characters as it can. Same limitations/issues apply (UNIMPLEMENTED)
+# Same as obscure_variables, but instead uses as few characters as it can. Same limitations/issues apply
 OPTION_minimise_variables = True
 
 # A funny bug encountered during the coding of minimise variables due to a missing return statement, too funny not to keep in. Only applies if minimise variables is enabled
@@ -30,10 +30,10 @@ OPTION_land_of_the_underscores = False
 OPTION_obscure_posargs = True
 
 # Occassionally inserts a bit of garbage (code that does, quite literally, nothing)
-OPTION_insert_junk = True
+OPTION_insert_junk = False
 
 # Attempts to figure out when if elif statements are used instead of exponentially indenting else statements
-OPTION_use_elif = False
+OPTION_use_elif = True
 
 # Uses brackets in places where they are probably excessive, but could be worth having to be on the safe side
 OPTION_extra_brackets = False
@@ -157,7 +157,7 @@ def CreateExecutionLoop(code):
 			else:
 				return var, False
 		def createVar(self, var, forceNormal=False):
-			if not OPTION_obscure_variables:
+			if not (OPTION_obscure_variables or OPTION_minimise_variables):
 				return str(var)
 			else:
 				if var in self.VarMapping:
@@ -202,7 +202,7 @@ def CreateExecutionLoop(code):
 		pass
 
 	_RandomCharacters = ["_"]
-	if not OPTION_land_of_the_underscores:
+	if not (OPTION_minimise_variables and OPTION_land_of_the_underscores):
 		for i in range(65, 91):
 			_RandomCharacters.append(chr(i))
 		for i in range(97, 123):
@@ -420,7 +420,7 @@ def CreateExecutionLoop(code):
 			if expr.asname:
 				return f"{expr.name} as {scope.createVar(expr.asname)}"
 			else:
-				if OPTION_obscure_variables and expr.name != "*":
+				if (OPTION_obscure_variables or OPTION_minimise_variables) and expr.name != "*":
 					return f"{expr.name} as {scope.createVar(expr.name)}"
 				else:
 					return f"{expr.name}"
