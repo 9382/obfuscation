@@ -200,3 +200,21 @@ print(5, a, b, c)
 
 x, y, z = {1:2, 4:5, 7:8}
 print(x, y, z)
+
+## Testing variables being defined post-scope (yet still valid definitions)
+a1 = 5
+def a():
+	return a1, a2
+a2 = 6
+print(a())
+
+def b():
+	return b1
+import ast as b1
+print(b())
+
+[c1, c2] = [1, 2]
+def c():
+	return c1, c2, c3, c4
+[c3, c4] = [3, 4]
+print(c())

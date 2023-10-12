@@ -23,6 +23,9 @@ OPTION_obscure_variables = True
 # Same as obscure_variables, but instead uses as few characters as it can. Same limitations/issues apply
 OPTION_minimise_variables = True
 
+# Avoids renaming functions or classes so as to keep the eventual __qualname__ intact
+OPTION_respect_qualname = True
+
 # A funny bug encountered during the coding of minimise variables due to a missing return statement, too funny not to keep in. Only applies if minimise variables is enabled
 OPTION_land_of_the_underscores = False
 
@@ -760,8 +763,20 @@ def CreateExecutionLoop(code):
 		debugprint("Executing statement list...")
 		compiledText = []
 		for statement in statList:
-			if type(statement) in [ast.FunctionDef, ast.AsyncFunctionDef]:
-				scope.createVar(statement.name)
+			# Pre-calculate variable names to avoid post-scope weirdness
+			# This does not do any sort of deep traversal, only statements immediately in this statlist are considered
+			# This helps make code like `def x(): return y \n y = 5` rewrite correctly when replacing variables (though just dont write like this in the first place please)
+			print(statement, type(statement))
+			if type(statement) in [ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef]:
+				scope.createVar(statement.name, forceNormal=OPTION_respect_qualname)
+			elif type(statement) == ast.Assign:
+				for target in statement.targets:
+					ExecuteExpression(target, scope)
+			elif type(statement) in [ast.AugAssign, ast.AnnAssign]:
+				ExecuteExpression(statement.target, scope)
+			elif type(statement) in [ast.Import, ast.ImportFrom]:
+				for name in statement.names:
+					ExecuteExpression(name, scope)
 			elif type(statement) in [ast.Global, ast.Nonlocal]:
 				ExecuteStatement(statement, scope)
 		for statement in statList:
