@@ -1676,6 +1676,22 @@ local function deepModify(t, firstCall)
 	end
 end
 
+--[[ quick in-script way of testing
+print((function(C)
+  local s,p = ParseLua(C)
+	if not s then
+		print("Failed to parse the lua - "..p)
+		return false,p
+	end
+
+	-- print(PrintTable(p))
+	deepModify(p, true)
+	-- print(PrintTable(p))
+	return true, serializer(p)
+end)([====[
+]====]))
+--]]
+
 return function(C)
 	local s,p = ParseLua(C)
 	if not s then
