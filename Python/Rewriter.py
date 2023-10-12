@@ -766,7 +766,6 @@ def CreateExecutionLoop(code):
 			# Pre-calculate variable names to avoid post-scope weirdness
 			# This does not do any sort of deep traversal, only statements immediately in this statlist are considered
 			# This helps make code like `def x(): return y \n y = 5` rewrite correctly when replacing variables (though just dont write like this in the first place please)
-			print(statement, type(statement))
 			if type(statement) in [ast.FunctionDef, ast.AsyncFunctionDef, ast.ClassDef]:
 				scope.createVar(statement.name, forceNormal=OPTION_respect_qualname)
 			elif type(statement) == ast.Assign:
