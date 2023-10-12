@@ -1,6 +1,5 @@
 # THIS VERSION USES SERIALIZED INPUT AND REFERENCES, AND THEREFORE MAY BE LESS UNDERSTANDABLE
 import math
-import ast
 
 _DEBUG = True
 def debugprint(*args, **kwargs):
@@ -616,7 +615,7 @@ def CreateExecutionLoop(code):
 
 		elif stType == 15:
 			for name in statement[1]:
-				target, storedName = name[1], name[2]
+				target, storedName = name[0], name[1]
 				out = __import__(target, globals(), locals(), [], 0)
 				if storedName:
 					for term in target.split(".")[1:]: #This looks scary but I think it's valid
@@ -630,7 +629,7 @@ def CreateExecutionLoop(code):
 		elif stType == 16:
 			module = statement[1]
 			for name in statement[2]:
-				target, storedName = name[1], name[2]
+				target, storedName = name[0], name[1]
 				if target == "*":
 					out = __import__(module, globals(), locals(), [], statement[3])
 					for term in module.split(".")[1:]:
