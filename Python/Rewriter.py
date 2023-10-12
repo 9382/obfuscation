@@ -169,7 +169,7 @@ def CreateExecutionLoop(code):
 					if self.scopeType == "class":
 						newName = var
 					else:
-						newName = GenerateRandomStr()
+						newName = GenerateRandomStr(ForVariable=True)
 					self.VarMapping[var] = newName
 					return newName
 		def deleteVar(self, var):
@@ -221,8 +221,8 @@ def CreateExecutionLoop(code):
 				lastVar[i] = 0
 		lastVar = [0] * (len(lastVar)+1)
 		return _RandomCharacters[0] * len(lastVar)
-	def GenerateRandomStr(length=None):
-		if OPTION_minimise_variables:
+	def GenerateRandomStr(length=None, ForVariable=False):
+		if OPTION_minimise_variables and ForVariable:
 			return GenerateSmallestStr()
 		if not length:
 			length = random.randint(20,40)
@@ -842,14 +842,14 @@ def CreateExecutionLoop(code):
 		lambda: ast.Pass(),
 		lambda: ast.If(test=ast.Constant(value=GenerateRandomStr()),body=[ast.Pass()],orelse=[]),
 		lambda: ast.If(
-			test=ast.NamedExpr(target=ast.Name(id=GenerateRandomStr(),ctx=ast.Store()),value=ast.Constant(value=0)),
-			body=[ast.Expr(value=ast.Call(func=ast.Name(id=GenerateRandomStr(),ctx=ast.Store()),args=[],keywords=[]))],orelse=[]
+			test=ast.NamedExpr(target=ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store()),value=ast.Constant(value=0)),
+			body=[ast.Expr(value=ast.Call(func=ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store()),args=[],keywords=[]))],orelse=[]
 		),
-		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.Constant(value=random.random())),
-		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.Constant(value=random.randint(-10,10))),
-		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.Constant(value="")),
-		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.List(elts=[],ctx=ast.Load())),
-		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.Dict(keys=[],values=[])),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store())],value=ast.Constant(value=random.random())),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store())],value=ast.Constant(value=random.randint(-10,10))),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store())],value=ast.Constant(value="")),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store())],value=ast.List(elts=[],ctx=ast.Load())),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store())],value=ast.Dict(keys=[],values=[])),
 	]
 	def GenerateRandomJunk():
 		return random.choice(JunkLines)()
