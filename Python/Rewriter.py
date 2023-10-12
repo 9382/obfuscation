@@ -23,6 +23,9 @@ OPTION_obscure_variables = True
 # Same as obscure_variables, but instead uses as few characters as it can. Same limitations/issues apply (UNIMPLEMENTED)
 OPTION_minimise_variables = True
 
+# A funny bug encountered during the coding of minimise variables due to a missing return statement, too funny not to keep in. Only applies if minimise variables is enabled
+OPTION_land_of_the_underscores = False
+
 # Enables obscuring of positional arguments. Don't use if positional arguments are sometimes directly referenced, as this may cause errors
 OPTION_obscure_posargs = True
 
@@ -199,10 +202,11 @@ def CreateExecutionLoop(code):
 		pass
 
 	_RandomCharacters = ["_"]
-	for i in range(65, 91):
-		_RandomCharacters.append(chr(i))
-	for i in range(97, 123):
-		_RandomCharacters.append(chr(i))
+	if not OPTION_land_of_the_underscores:
+		for i in range(65, 91):
+			_RandomCharacters.append(chr(i))
+		for i in range(97, 123):
+			_RandomCharacters.append(chr(i))
 	lastVar = []
 	def GenerateSmallestStr():
 		nonlocal lastVar
@@ -212,6 +216,7 @@ def CreateExecutionLoop(code):
 				out = str().join(_RandomCharacters[c] for c in lastVar)
 				if out in ["if", "do", "in", "as"]:
 					return GenerateSmallestStr() #just be a bit careful
+				return out #(This missing line is the origin of land of the underscores)
 			else:
 				lastVar[i] = 0
 		lastVar = [0] * (len(lastVar)+1)
