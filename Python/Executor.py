@@ -361,7 +361,10 @@ def CreateExecutionLoop(code):
 			elif exprType == ast.SetComp:
 				return {x[0] for x in out}
 			elif exprType == ast.GeneratorExp:
-				return (x[0] for x in out)
+				gen = (x[0] for x in out)
+				gen.__name__ = "<genexpr>"
+				gen.__qualname__ = "<genexpr>"
+				return gen
 
 		elif exprType == ast.DictComp:
 			subScope = VariableScope(scope, "generator")
