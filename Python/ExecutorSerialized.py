@@ -1,7 +1,7 @@
 # THIS VERSION USES SERIALIZED INPUT AND REFERENCES, AND THEREFORE MAY BE LESS UNDERSTANDABLE
 import math
 
-_DEBUG = True
+_DEBUG = False
 def debugprint(*args, **kwargs):
 	if _DEBUG:
 		print("[Debug]", *args, **kwargs)
