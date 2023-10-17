@@ -577,7 +577,7 @@ def CreateExecutionLoop(code):
 				out = ExecuteExpression(item[0], scope)
 				out.__enter__()
 				toExit.append(out)
-				if item.optional_vars:
+				if item[1]:
 					storeAs = ExecuteExpression(item[1], scope)
 					#If this isnt a name expr, then uh, good luck!
 					scope.setVar(storeAs, out)
