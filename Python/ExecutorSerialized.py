@@ -432,7 +432,7 @@ def CreateExecutionLoop(code):
 					return False
 
 		elif exprType == 5: #This is in and of itself an IfExp
-			return ExecuteExpression(expr[2], scope) if ExecuteExpression(expr[1], scope) else ExecuteExpression(expr[3], scope)
+			return ExecuteExpression(BodyList[expr[2]], scope) if ExecuteExpression(expr[1], scope) else ExecuteExpression(BodyList[expr[3]], scope)
 
 		elif exprType == 13:
 			func = ExecuteExpression(expr[1], scope)
@@ -455,7 +455,7 @@ def CreateExecutionLoop(code):
 			def LambdaHandler(args, kwargs):
 				subScope = VariableScope(scope, "lambda")
 				HandleArgAssignment(subScope, expr[1], "<lambda>", args, kwargs)
-				return ExecuteExpression(expr[2], subScope)
+				return ExecuteExpression(BodyList[expr[2]], subScope)
 			return lambda *args, **kwargs : LambdaHandler(args, kwargs)
 
 		else:
@@ -539,13 +539,13 @@ def CreateExecutionLoop(code):
 
 		elif stType == 10:
 			if ExecuteExpression(statement[1], scope):
-				return ExecuteStatList(statement[2], scope)
+				return ExecuteStatList(BodyList[statement[2]], scope)
 			else:
-				return ExecuteStatList(statement[3], scope)
+				return ExecuteStatList(BodyList[statement[3]], scope)
 
 		elif stType == 9:
 			while ExecuteExpression(statement[1], scope):
-				out = ExecuteStatList(statement[2], scope)
+				out = ExecuteStatList(BodyList[statement[2]], scope)
 				if out != None:
 					if out.Type == "Break":
 						break
@@ -554,13 +554,13 @@ def CreateExecutionLoop(code):
 					else:
 						return out
 			else:
-				return ExecuteStatList(statement[3], scope)
+				return ExecuteStatList(BodyList[statement[3]], scope)
 
 		elif stType == 8:
 			iterRange = ExecuteExpression(statement[2], scope)
 			for value in iterRange:
 				Assign(statement[1], value, scope)
-				out = ExecuteStatList(statement[3], scope)
+				out = ExecuteStatList(BodyList[statement[3]], scope)
 				if out != None:
 					if out.Type == "Break":
 						break
@@ -569,7 +569,7 @@ def CreateExecutionLoop(code):
 					else:
 						return out
 			else:
-				return ExecuteStatList(statement[4], scope)
+				return ExecuteStatList(BodyList[statement[4]], scope)
 
 		elif stType == 11:
 			toExit = []
@@ -582,7 +582,7 @@ def CreateExecutionLoop(code):
 					#If this isnt a name expr, then uh, good luck!
 					scope.setVar(storeAs, out)
 			try:
-				out = ExecuteStatList(statement[2], scope)
+				out = ExecuteStatList(BodyList[statement[2]], scope)
 			except BaseException as exc:
 				for item in toExit:
 					item.__exit__()
@@ -594,7 +594,7 @@ def CreateExecutionLoop(code):
 
 		elif stType == 13:
 			try:
-				out = ExecuteStatList(statement[1], scope)
+				out = ExecuteStatList(BodyList[statement[1]], scope)
 				if out != None:
 					return out
 			except ExecutorException as exc: #Executor errors are not to reach the source code ever
@@ -605,16 +605,16 @@ def CreateExecutionLoop(code):
 						subScope = VariableScope(scope, "asclause")
 						if handler[1]:
 							subScope.setVarRaw(handler[1], exc)
-						out = ExecuteStatList(handler[2], subScope)
+						out = ExecuteStatList(BodyList[handler[2]], subScope)
 						if out != None:
 							return out
 						break
 			else:
-				out = ExecuteStatList(statement[2], scope)
+				out = ExecuteStatList(BodyList[statement[2]], scope)
 				if out != None:
 					return out
 			finally:
-				return ExecuteStatList(statement[4], scope)
+				return ExecuteStatList(BodyList[statement[4]], scope)
 
 		elif stType == 15:
 			for name in statement[1]:
@@ -648,7 +648,7 @@ def CreateExecutionLoop(code):
 			def FunctionHandler(*args, **kwargs):
 				subScope = VariableScope(scope, "function")
 				HandleArgAssignment(subScope, statement[2], statement[1], args, kwargs)
-				out = ExecuteStatList(statement[3], subScope)
+				out = ExecuteStatList(BodyList[statement[3]], subScope)
 				if out != None:
 					if out.Type == "Break" or out.Type == "Continue":
 						raise SyntaxError(f"'{out.Type}' outside loop")
@@ -663,7 +663,7 @@ def CreateExecutionLoop(code):
 			async def FunctionHandler(*args, **kwargs):
 				subScope = VariableScope(scope, "function")
 				HandleArgAssignment(subScope, statement[2], statement[1], args, kwargs)
-				out = ExecuteStatList(statement[3], subScope)
+				out = ExecuteStatList(BodyList[statement[3]], subScope)
 				if out != None:
 					if out.Type == "Break" or out.Type == "Continue":
 						raise SyntaxError(f"'{out.Type}' outside loop")
@@ -684,7 +684,7 @@ def CreateExecutionLoop(code):
 			DummyClass.__name__ = statement[1]
 			DummyClass.__qualname__ = statement[1]
 			subScope = ClassScope(scope, DummyClass) #Custom class subscope
-			out = ExecuteStatList(statement[4], subScope) #We shouldn't end early, period
+			out = ExecuteStatList(BodyList[statement[4]], subScope) #We shouldn't end early, period
 			if out != None:
 				raise SyntaxError(f"Now that is just illegal class logic, I don't even know what to say anymore")
 			DummyClass = ImplementObjectDecorators(DummyClass, statement[5], scope)
@@ -945,14 +945,18 @@ def CreateExecutionLoop(code):
 					Output.append(Read(8))
 				elif ObjType == TYPE_INT_HALF:
 					Output.append(Read(4))
-		return deserializeloop()
+		Objects = []
+		for i in range(Read(18)):
+			Objects.append(deserializeloop())
+		return Objects
 
-	finalCode = DeserializeAST()
+	BodyList = DeserializeAST()
+	CoreCode = BodyList.pop()
 	def __main__():
 		scope = VariableScope(None, "core")
 		debugprint("Input code:",code)
 		try:
-			out = ExecuteStatList(finalCode[0], scope)
+			out = ExecuteStatList(CoreCode, scope)
 		except BaseException as exc:
 			if _DEBUG:
 				debugprint("[!] We ran into a critical error")
@@ -975,8 +979,7 @@ def CreateExecutionLoop(code):
 	return __main__
 
 
-rawdata = r"@FDq}FEFxNSRwN`@NAHFDFdLkrP`BIAIFDq}FEFxNSRwN`@NAHFDJQHIHpfOhphwArZVyt@ApI@p`u]hXWP@DRAaelk\r@@p`tESQ@h@QIIFDq}FEFxNSRwN`@NAHGt]@B@w`@RH[r@IDhDE@d\aaQoH@NAH|DXT[p@C`RRAaCjbLH]dRBRBRNhFE`LJMx@AqIFEF|`@xdcBc^`@\RRNIIFE`LH]TQaClbLH]tRNAJHpfOhphwArZVyt@ApI@yCBc^@@\BQzHparQIAIGAlp@@PFpnSN@IDMa\f\r@DbTBB`RAaL_QaQnCdtmsh@C`RAaQlKdsfP@NAHphvErYp@\BRBRNXplArFEFpnSNY@@xDclQaQlKds`@xDd\aaQlKds`@xDcpQaQlKdsfP@NAIHxDd`iD\FsFP@@PF|@BQC^PAHaoP@dR`Fp`BQCX`AHalX@dRDaaAHdMk@DbAaAHd`XSGtXT[`yMK\z@@xD`XT[p@C`RLJMy@ApIFEF}@@xDcBC\wAlZWP@QFEFp`@xDcBcX`@\BQaQlX@NAHp`wMp[Fet@DQaQmX@NAIAIHJQFDq}FEFsFP@NAHFDNJHparQHFFV}@@paZIFFVp`@pauQHprvH@FDNrIFFVx@@paxQHprvL@FDNzIIHpfOhphwArZVyt@ApI@p`v}u]Ct@QGtXT[L@C`RAaCdbLH\tRBRBRNSUFUs]@@DDC`u}_ZVyi]E}_@@B@wMe[FX@RH[l@IDhDE@dCjAaDXT[frmcL@C`Rwd@GDdcBc]`@\BTRBdQp[Nrncr@@DAn[JvLp@dR`PTBPNXpbLJMsYVqf@ApI[r@C`RRBdRBQaL_QaQnCdtmsh@C`RAaAjcJynaz@HcBcUFUs]@@\BRBRNhFEFjLkfzI{Du@@xdd_QaQjcJyn`@NAHFDOBIAJHpfOhphwArZVyt@ApI@p`uQe\wQOXfh}@DQaQjcJynb^qMP@NAIAIFDq}FEFxNSRwN`@NAHFDFjIy\slkh|eAR^`BH~cBHphuQe\wQOXfh@G@el{JzOH@NAHHIHIH{CBHphuQe\wQOXfh@G@eoH@NIHzDXPhdXSGtXT[`yMK\z@@xD`XPZhgesNrncrTEIz@HczLHcBcUFUs]D}bZ`@\BVslkh|`@xD``d`dcjAaQo@@NIIGXCBCPPADXP{HdCBGUDXPmDeD]PLJMy@AqIH{ACBGaD`XT[p@C`RLHVbRbNhFEF}@@xdd]`dLHMA@DRAaQoH@NAHphw`@G@dXPxhdhcBX~cBc\GIi[gP@G@dCBc^@@\BQaQoH@NAHphwh@G@d`dcjAaQo@@NIIFEPLHMA@DQaAhbH@HcBCP`ADXPZFahRF@Hd\BTQaL_QaQnCdtmsh@C`RAaAicRynbFwmk`@HdDd]PLJMoXfh@GDdcpNPphuL@G@d]BOhphwMt\`@\BPOhphv}rY@@\BPLJMC@ApIHIHIH@phuL@GDdXT[p@C`RA|FEFi`@xD`XRI@p`tD@QIO@`XTZF@CbRLJMS@ApI@~CBcPp@\BPLID`XPZD@Hdg`RTQaL_QaQnCdtmsh@C`RA}FEFzOK`r`@xD`XT[^qMP@NAIAHphv}bZ`@\BRBRLIczLJMp\fen]@@\BPLHMSYWQC[vup@DRBRNhFEFwlST@CbRQyGHXTZf@C`RNaGtXT[fzNP@NAHGtXT[^yL`@NAHFEFa`@xDdDdDd@XTZf@CbRLJMx@ApI@~CBcTp@\BPLID`XPZB@Hdg`PLJMC@AqIFEFi`@xD`_AaQhX@NAHFDbPLHMB@DRSpIJHpfOhphwArZVyt@ApI@~cBc]GepYP@\BPLJMoXfh@G@d`dXT[^qMP@NAIAIFDq}FEFxNSRwN`@NAHFDFbMKFzH[^vn@@bPRQu@phv}bZ`@\RROPyCBcTp@\BQtH~cBc\wQr@ApI@~cBc[wId@ApI@phtL@G@d`d`dcBcTp@\BPAaQjX@NIHphw`@G@dCxLJMS@ApI@pdRAaAhH@bR^A@phtL@GDdXTZf@C`RA|FEFa`@xD`XRI@p`tH@QIO@dhcBX~cBc\GIi[gP@G@dCzLJMt^WAe@ApI@phv}bZ`@\BRBQaQm{Du@@xDdDdXSGtXT[`yMK\z@@xD`XPZNrmsJyLKhwnP@bPRQu@phv]e[`@\RROXyCBcTp@\BQtH~cBc\wQr@ApI@~cBc[wId@ApI@phtL@G@d`d`d`CBcTp@\RQaQo@@NAHGpXTZf@C`RAaHdCBCPPADd|BAaQhX@NIHphuL@G@dCxLJMC@ApI@pdRAaAhP@bR^AIQFDq}FEFxNSRwN`@NAHGtXT[h|nCJ@C`RAaQl{Jw@@xDdDcBcYvUn@ApIHIH|CBc]`@\RQaQl{Jw@@xD`XSGtXT[`yMK\z@@xD`XPZNrmq@wlSTrl[hPLk\zNSr@HcBc]`@\BRBRPTQp[HX`@A@[^qMP@dR`PTBPLIczLJMp\fen]@@\BPLHMH[v}kZVygHF}bZbAi[bADLRxnK`AD`dc`wIe]@@@`hDE@dCBX~cBc\GIi[gP@G@dCBCQCD`ZF}oZrAo[`ADXT[^qMP@NAIAIGL_QaQm{Du@@xD``ddEHcfLJMrYWP@G@ddEHc`vPr@@B@v}bZ`AHe@`hD`XSGtXT[`yMK\z@@xD`XPZPwm{VtmsNPM{DuDCRwDBHYEq\W@BIAIGAnSJz@@AAPHJAHFDq}FEFxNSRwN`@NAHFDFbFQ@tM{^udC^w@BHphv}bZ`@\BRBRNX~cBc[vIj@ApIAAIHJQGLXT[drn`@NAIHJQFDq}FEFxNSRwN`@NAHFDFbLkFwnSBzM{dydChrn[hPFH@bPRQp[hrn[h@@DE@`hD`XSGtXT[`yMK\z@@xD`XPZhtMKfPMKfPNcJyn`@bPRQsFDKQI@phvPq@ApIFEFrFP@NAIRHpfOhphwArZVyt@ApI@p`v}u]Ct@QGtXT[hrn[h@C`RBBRBRLIczLJMp\fen]@@\BPLHMTYWMtHGAa\gP`L`AD`dcdwQe\wPr@@PPLIczLJMp\fen]@@\BPLHME^FUc]WQi[f\`Xf}d^RAoYbAtYWMt@DRBRPLJMdLP@\BQaQlad@C`RRLIczLJMp\fen]@@\BPLHMR]VynZVygHGQe\wP@QHIHpfOhphwArZVyt@ApI@p`v}u]Ct@QGtXT[hrn[hY@@xD``d`dcBX~cBc\GIi[gP@G@dCBCQFUc[wIa]F}r\rAtYWMtHFQo[fT@QHIHpfOhphwArZVyt@ApI@p`tefQWapLPAD]QaBtQaCbbNhpaZHparQGTXPmDXPyhcBGQDddDdXSGtXT[`yMK\z@@xD`XPZRsHkpxFP@bNhpaZHpaqQGTXPiDXPyHcjLHVbLH\tQaChbRRBRLIczLJMp\fen]@@\BPLHMIYdUx\CL@QGTXPiD]QaBtQaCbbLH\dRNhpaZHpasQFDNbIIAIGTCBc^@@\RRLJ`XPyHcBGMDXPzHd\BTQu@phwd@GDdclAaCdbLH]DRAaCfbLH]TRTQu@phwdr@AqIH{@XP[JwL`@bPLHMAWEqn@DRTQaL_QaQnCdtmsh@C`RAaCbbLJ`XT[p@C`RQpIFDNjIAIFDq}FEFxNSRwN`@NAHFDNJHpfLJ`XT[p@C`RQpIG@dXPzhdDdXSGtXT[`yMK\z@@xD`XPxhcBc^P@\BQaClbPRQaL_QaQnCdtmsh@C`RAaCbbLIcBc^P@\BQpIFDNrIAIFDq}FEFxNSRwN`@NAHFDNJHparQFEF|fP@NAIAIFDq}FEFxNSRwN`@NAHFDNJHparQFDqaQoId@C`RNAIAIFDq}FEFxNSRwN`@NAHFDNJHparQHFFTLJMyL`@\BRRQu@plAaQmp@NIHpfLJMy@AqIGDdXT[\@CbRQqIHplAaCbbLH\dQaCfbQpIQFDq}FEFxNSRwN`@NAHFEFw@@xDcBc^P@\BRBRNhFE`LJMa@AqIFDqaQoH@NIHxdcBcX`@\RQaQlX@NIIGDdcBpFDNJHparQFDNZHpatQFDNjIG@eDXSGtXT[`yMK\z@@xD`XT[B@C`RLJMy@ApIFEFq@@xDcBcXp@\BRBRNhFE`LJMa@AqIFEFq@@xdcBXphwd@GDd\RQaQlX@NIIGDdcBpFDNJHparQFDNZHpatQFDNjIG@eDXSGtXT[`yMK\z@@xD`XT[B@C`RLJMb@ApIFEF|`@xDcBcXp@\BRBRNhFEF|@@xddXU@pauQFDKQHxDhcjAaQoH@NIIFEPLIcBc^@@\BQpIFDOBIG@eD]PLJMz@AqIHpjAaLXT[r@C`RNAHpfLJMx@ApIG@dXPZB@HcBGEDc`RbLIczLJMp\fen]@@\BPLHMx@DQaQo@@NAHp`wd@QFEF|`@xDcBC^`ADXT[t@C`RPRQaL_QaQnCdtmsh@C`RA@p`tD@QGx\aaQo@@NAH{DXPyhfW`@@@@@@@@bLHMB@DQ~FEF|`@xDr|@@@@@@@@DQaAhX@bOpyCBc^`@\BQvHparQLo@@@@@@@@ADd`dcjAaQlP@NIIFDH`Bmt|MaDtARJHpfOhphwArZVyt@ApI@`_aaQlP@NALo@@@@@@@@@_pLHLrKcL@QIIIAIGTCBc^@@\RRLH\TTQp[r@@DE@`hD`XQC]P@d]PLJMx@AqIHparQQGInh@BBAaDMw@BQp[n@@DAn[JvLp@dR`PTBPLIczLJMp\fen]@@\BPLHMw@DQaQn[JvLp@NAIAIFDq}FEF|@@xD`XPyHdDdXSGtXQFEFz`@xDmo@ApI@pasQHIIARHpdF|@AHxMx@@B@wMe[FX@RIPHJAHFDq}FEFxNSRwN`@NAHFDF|@BHphwMe[FX@G@d`ddEHc`v|@@HC\vUlY`AHe@`hD`XSGtXT[`yMK\z@@xD`XP[^@HcBc\vUlY`@\BRBRPTbPRPTbLIczLJMy@ApIAAIFDq}FEFxNSRwN`@NAHFDFzgh@bLJMu@ApIHIHpfOhphwArZVyt@ApI@p`w`}@DQaQo@@NAIAIFDq}FEFxNSRwN`@NAHFDF{gh@bLJMw@ApIHIHpfOhphwArZVyt@ApI@p`wTn]rAe^Fes]GL@DQ}FEFtLKfpnchy@@xD`XT[j@C`RLHMw@DRBRBRLIczLJMp\fen]@@\BPLHMuKg``YWai\wQsOpAD_QaQmCBylKhzNP@NAHFEFz`@xDcBC^@AD`d`dcBX~cBc\GIi[gP@G@dCBC]RyoHFUxZWMt\s|@QGtXT[Ppn[BzNcd@C`RAaQnh@NAHp`v|@QHIHIHpfOhphw\@G@dCBGED`dcjAaQlH@NIIFDNJJH{cBcX`@\RQaQmK\z@@xDcBCL`AGbQaL_QaQnCdtmsh@C`RAaQlH@NAH~cBc]GepYP@\BPLJMa@ApIHIHIHpfOhphwArZVyt@ApI@phvH@G@d_QaQncrxLh@NAHFEFq@@xDdDdDd]qaQlX@NIHphven]@@\BUqH`Mi[WAtYWMt@F|OH@RQaL_QaQnCdtmsh@C`RAaQoCr@C`RPRQaL_QaQnCdtmsh@C`RAaDXT[p|`@xDm_WvQiXwQ_Wp@\BRBRLHMi[WAtYWMtKfem\GQe\wQ_YfelYSH@@YT@Hg`QaL_QaQnCdtmsh@C`RAaQoCp@C`RPRQaAmKZxNcJyn`@@vem\GQe\wQ_YfelYSH@[DY@ACZVup]FUs]CH@[Zwl`@SpHpfOhphwArZVyt@ApI@p`vem\GQe\wQ_YfelYSH}@DQaQlQd@C`RLHMi[WAtYWMtLct@QFEFvm{H@C`RPRQaAmKZxNcJyna\tmk`zLkfzFP@@vem\GQe\wQ_\wUbYfelYPAD|BLIczLJMp\fen]@@\BPLHMi[WAtYWMtWwMuXfYi[FT}@DQaQmKZxNcJynb~ynkDsMKXr`@xDdDd]PLJMx@AqIH{@XPxhcBGMD`XPyHcBGQDeD^AaQoH@NIHphw`@G@dCBX~cBc\GIi[gP@G@dCBCYgd@QFEF|`@xDdDd`hcpLK@XT[r@CbRLIcBc^`@\RQqIHxdczLHcBc^@@\BVtncJvnX@NAHHI@pfOhphwArZVyt@ApI@p`vYy^`ADXT[r@C`RLJMz@ApIHIIAQGTCBpFEFp`@xdcBXphvH@GDd\RQaQlX@NIIGDdcBCUFUs]FenYpAEDXSGtXT[`yMK\z@@xD`XPxhcBcXP@\BQaQlP@NAHphvL@G@d`dcjAaXCBcXP@\RQaLXT[D@CbRNIHphvL@GDdcbRQaTCBGEDXPyHcBGMDXPzHcBGUDc`RbLIczLJMp\fen]@@\BPLH\dQaQlH@NAHphvH@G@dXT[F@C`RPRQu@plAaQlH@NIHpfLJMb@AqIGDdXT[F@CbRQqIHplAaCbbLH\dQaCfbLH]DQaCjbQpIQFDq}FEFxNSRwN`@NAHFDNZHphvD@G@dXT[D@C`RLJMc@ApIHIHz`XV@phvD@GDdXSFEFq@@xdcbRLJMc@AqIHxdd]pLH\TQaCdbLH\tQaChbLH]TRTQaL_QaQnCdtmsh@C`RAaChbLJMa@ApIFEFq@@xDcBcXp@\BRBRNhFE`LJMa@AqIFDqaQlP@NIHxdcBcXp@\RRNIIGXCBGEDXPyhcBGUDXP{hcBGeD`XPyHcBGQDXP{HcBGaDXP}HdhcBX~cBc\GIi[gP@G@dCBGUDXT[B@C`RLJMb@ApIFEFq`@xDdDd]PLK@XT[p@CbRLJMy@AqIFEF}@@xdd\RRNpFDNJHpatQFDNzI@parQFDNjHpaxQIQFDq}FEFxNSRwN`@NAHFEF|@@xDcBc^P@\BQaQoP@NAIAIHI@"
-# Sublime text throws a hissy fit when colouring the above if you use single quotes but thats perfectly legal - just clarify r (raw) for safety
+rawdata = open("Serializer_output.txt", "r", encoding="utf-8").read()
 
 debugprint("Generating execution loop")
 out = CreateExecutionLoop(rawdata)

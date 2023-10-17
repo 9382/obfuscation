@@ -185,7 +185,6 @@ def NormalizeScientific(bits):
 	raw = bits.replace(".","")
 	NotationOffset = raw.find("1")
 	Normalized = raw[NotationOffset:NotationOffset+1] + "." + raw[NotationOffset+1:]
-	print("pre-normal",bits,"post-normal",Normalized)
 	Exponent = bits.find(".")-2-(NotationOffset-1)
 	return Normalized,Exponent
 def DBitToNum(dbits):
@@ -205,9 +204,11 @@ class BitWriter:
 		if strictWidth:
 			assert len(BitRepresentation) <= strictWidth
 		self.Data = self.Data + BitRepresentation
+		return self
 	def WriteString(self, string):
 		for char in string:
 			self.Data = self.Data + ToBit(ord(char),8)
+		return self
 	def WriteDouble(self, double):
 		if double == 0:
 			self.Data = self.Data + "0"*64
@@ -228,6 +229,7 @@ class BitWriter:
 			NormalizedBits = padright(NormalizedBits,52,"0")
 		Exponent = ToBit(Exponent+1023,11)
 		self.Data = self.Data + sign + Exponent + NormalizedBits
+		return self
 	def ToString(self):
 		final = ""
 		Data = self.Data
@@ -261,47 +263,63 @@ class BitReader:
 		return sign * Exponent * DBitToNum("1"+Mantissa)
 	def LoadBits(self, bitdata):
 		self.Data = self.Data + bitdata
+		return self
 	def LoadString(self, strdata):
 		for char in strdata:
 			self.Data = self.Data + ToBit(ord(char)%64,6)
+		return self
 
 def simplify(Object):
-	objtype = type(Object)
-	if isinstance(Object, ast.AST):
-		# print(objtype, Object._fields)
-		out = []
-		if objtype in Expressions:
-			out.append(ExpressionToID[objtype])
-		elif objtype in Statements:
-			out.append(StatementToID[objtype])
-		elif objtype in Contexts:
-			out.append(ContextToID[objtype])
-		elif objtype in Operators:
-			out.append(OperatorToID[objtype])
-		elif objtype in UntypedTypes:
-			pass
+	CurrentID = 0
+	Bodies = []
+	def CreateBodyWithID(Body):
+		nonlocal CurrentID
+		out = simplifyloop(Body)
+		Bodies.append(out)
+		CurrentID += 1
+		return CurrentID-1
+	def simplifyloop(Object):
+		objtype = type(Object)
+		if isinstance(Object, ast.AST):
+			# print(objtype, Object._fields)
+			out = []
+			if objtype in Expressions:
+				out.append(ExpressionToID[objtype])
+			elif objtype in Statements:
+				out.append(StatementToID[objtype])
+			elif objtype in Contexts:
+				out.append(ContextToID[objtype])
+			elif objtype in Operators:
+				out.append(OperatorToID[objtype])
+			elif objtype in UntypedTypes:
+				pass
+			else:
+				print("[!] I have no bloody idea how to handle the type of", objtype)
+			# print(Object, objtype, Object._fields, Object._attributes)
+			for field in Object._fields:
+				if field in ["body", "orelse", "finalbody"]:
+					out.append(CreateBodyWithID(getattr(Object, field)))
+				else:
+					out.append(simplifyloop(getattr(Object, field)))
+			return out
+		elif objtype == tuple:
+			return tuple(simplifyloop(x) for x in Object)
+		elif objtype == list:
+			return list(simplifyloop(x) for x in Object)
+		elif objtype == set:
+			return set(simplifyloop(x) for x in Object)
+		elif objtype == dict:
+			out = {}
+			for key in Object.keys():
+				out[simplifyloop(key)] = simplifyloop(Object[key])
+			return out
 		else:
-			print("[!] I have no bloody idea how to handle the type of", objtype)
-		# print(Object, objtype, Object._fields, Object._attributes)
-		for field in Object._fields:
-			out.append(simplify(getattr(Object, field)))
-		return out
-	elif objtype == tuple:
-		return tuple(simplify(x) for x in Object)
-	elif objtype == list:
-		return list(simplify(x) for x in Object)
-	elif objtype == set:
-		return set(simplify(x) for x in Object)
-	elif objtype == dict:
-		out = {}
-		for key in Object.keys():
-			out[simplify(key)] = simplify(Object[key])
-		return out
-	else:
-		# print(":(", Object, objtype)
-		return Object
+			# print(":(", Object, objtype)
+			return Object
+	Bodies.append(simplifyloop(Object.body))
+	return Bodies
 
-def serialize(Object):
+def serialize(Objects):
 	TYPE_LIST_START=0
 	TYPE_LIST_END=1
 	TYPE_NONE=2
@@ -313,13 +331,13 @@ def serialize(Object):
 
 	TYPE_WIDTH=3
 
-	def subserialize(Object, raw=False):
+	def subserialize(Object):
 		assert type(Object) == list
 		Writer = BitWriter()
 		Writer.Write(TYPE_LIST_START, TYPE_WIDTH)
 		def handlewriting(obj):
 			if type(obj) == list:
-				Writer.Data = Writer.Data + subserialize(obj, True)
+				Writer.Data = Writer.Data + subserialize(obj)
 			elif type(obj) == str:
 				Writer.Write(TYPE_STRING, TYPE_WIDTH)
 				obj = obj.replace("\\", "\\\\")
@@ -350,12 +368,13 @@ def serialize(Object):
 		for obj in Object:
 			handlewriting(obj)
 		Writer.Write(TYPE_LIST_END, TYPE_WIDTH)
-		if raw:
-			return Writer.Data
-		else:
-			return Writer.ToString()
+		return Writer.Data
 
-	return subserialize(Object)
+	Writer = BitWriter()
+	Writer.Write(len(Objects), 18)
+	for obj in Objects:
+		Writer.Data = Writer.Data + subserialize(obj)
+	return Writer.ToString()
 
 def deserialize(bitdata):
 	TYPE_LIST_START=0
@@ -403,16 +422,20 @@ def deserialize(bitdata):
 				Output.append(Reader.Read(8))
 			elif ObjType == TYPE_INT_HALF:
 				Output.append(Reader.Read(4))
-	return deserializeloop()
+	Objects = []
+	for i in range(Reader.Read(18)):
+		Objects.append(deserializeloop())
+	return Objects
 
 c = ast.parse(open("TestCode.py", "r", encoding="utf-8").read())
 # print(ast.dump(c))
 
-simple_original = simplify(c)
-encoded = serialize(simple_original)
+simplified = simplify(c)
+print("Body count:", len(simplified))
+encoded = serialize(simplified)
 decoded = deserialize(encoded)
 
-print("ORIGINAL", simple_original)
+print("ORIGINAL", simplified)
 print("DECODED ", decoded)
 print("RAW DATA", encoded)
 open("Serializer_output.txt", "w").write(encoded)

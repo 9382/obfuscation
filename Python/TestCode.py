@@ -90,6 +90,10 @@ print("IfExp3", (1 if True else 2) if False else (3 if True else 4))
 
 ## Testing a with clause (makes files)
 try:
+	crash()
+except:
+	print("Good start")
+try:
 	 with open("with.txt","w") as f:
 		 print("Closed?",f.closed)
 		 print("file",f)
