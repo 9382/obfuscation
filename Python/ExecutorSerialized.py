@@ -1,12 +1,4 @@
 # THIS VERSION USES SERIALIZED INPUT AND REFERENCES, AND THEREFORE MAY BE LESS UNDERSTANDABLE
-import math
-
-_DEBUG = False
-def debugprint(*args, **kwargs):
-	if _DEBUG:
-		print("[Debug]", *args, **kwargs)
-if not _DEBUG:
-	print("[Debug] debugprint is disabled")
 
 """ Progress Report
 
@@ -109,8 +101,6 @@ def CreateExecutionLoop(code):
 			self.Globals = set()
 			self.NonLocals = set()
 		def getVar(self, var):
-			debugprint("Asked to retrieve variable",var)
-			# debugprint(self,self.Variables)
 			self.References.add(var)
 			if var in self.Variables:
 				return self.Variables[var]
@@ -122,7 +112,6 @@ def CreateExecutionLoop(code):
 				else:
 					raise NameError(f"name '{var}' is not defined")
 		def setVarRaw(self, var, value): #Bypass scope-based checks
-			debugprint("Asked to raw set variable",var)
 			if type(var) != str:
 				raise ExecutorException(f"Attempted to set a variable of type {type(var)}")
 			if var in self.Globals or var in self.NonLocals:
@@ -133,12 +122,10 @@ def CreateExecutionLoop(code):
 			self.Variables[var] = value
 			self.Assignments.add(var)
 		def setVar(self, var, value):
-			debugprint("Asked to set variable",var)
 			if self.scopeType == "asclause":
 				return self.Parent.setVar(var, value)
 			self.setVarRaw(var, value)
 		def deleteVar(self, var):
-			debugprint("Asked to delete variable",var)
 			if self.scopeType == "asclause":
 				self.Parent.deleteVar(var)
 			if var in self.Variables:
@@ -263,14 +250,8 @@ def CreateExecutionLoop(code):
 		else:
 			raise ExecutorException(f"Unrecognised operator type '{op}'")
 
-	_DEBUG_LastExpr = None
-	_DEBUG_LastStatement = None
-
 	def ExecuteExpression(expr, scope, *, ForcedContext=None):
-		nonlocal _DEBUG_LastExpr
-		_DEBUG_LastExpr = expr
 		exprType = expr[0]
-		debugprint("Executing expression...",exprType)
 
 		if exprType == 16:
 			return expr[1]
@@ -462,10 +443,7 @@ def CreateExecutionLoop(code):
 			raise ExecutorException(f"[!] Unimplemented expression type {exprType}")
 
 	def ExecuteStatement(statement, scope):
-		nonlocal _DEBUG_LastStatement
-		_DEBUG_LastStatement = statement
 		stType = statement[0]
-		debugprint("Executing statement...",stType)
 
 		if stType == 19:
 			ExecuteExpression(statement[1], scope)
@@ -854,6 +832,7 @@ def CreateExecutionLoop(code):
 
 	# At this point we parse the obfuscated AST
 	def DeserializeAST():
+		import math
 		def padleft(s,n,p):
 			return p*(n-len(s))+s
 		def ToBit(n, pad=1):
@@ -954,20 +933,9 @@ def CreateExecutionLoop(code):
 	CoreCode = BodyList.pop()
 	def __main__():
 		scope = VariableScope(None, "core")
-		debugprint("Input code:",code)
 		try:
 			out = ExecuteStatList(CoreCode, scope)
 		except BaseException as exc:
-			if _DEBUG:
-				debugprint("[!] We ran into a critical error")
-				if _DEBUG_LastExpr:
-					debugprint("Last expression:",_DEBUG_LastExpr)
-				else:
-					debugprint("Last expression: None")
-				if _DEBUG_LastStatement:
-					debugprint("Last statement:",_DEBUG_LastStatement)
-				else:
-					debugprint("Last statement: None")
 			raise exc
 		else:
 			if out:
@@ -981,8 +949,4 @@ def CreateExecutionLoop(code):
 
 rawdata = open("Serializer_output.txt", "r", encoding="utf-8").read()
 
-debugprint("Generating execution loop")
-out = CreateExecutionLoop(rawdata)
-debugprint("Executing execution loop")
-out()
-debugprint("Finished execution loop")
+CreateExecutionLoop(rawdata)()
