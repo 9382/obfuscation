@@ -358,7 +358,7 @@ def CreateExecutionLoop(code):
 		if exprType == ast.Constant:
 			if type(expr.value) == str:
 				if ShouldWrap:
-					out = WrapInQuotes(expr.value).replace("\n","\\n")
+					out = WrapInQuotes(expr.value).replace("\n","\\n").replace("\0", "\\0")
 					if OPTION_insert_junk:
 						return out + "[::]"
 					else:
