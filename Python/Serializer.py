@@ -124,6 +124,8 @@ UntypedTypes = [
 	ast.alias,
 	ast.arg,
 	ast.comprehension,
+	ast.withitem,
+	ast.ExceptHandler,
 ]
 
 StatementToID = {}

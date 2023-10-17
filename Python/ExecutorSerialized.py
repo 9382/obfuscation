@@ -601,11 +601,11 @@ def CreateExecutionLoop(code):
 				raise exc
 			except BaseException as exc:
 				for handler in statement[2]:
-					if handler[1] == None or isinstance(exc, ExecuteExpression(handler[1], scope)):
+					if handler[0] == None or isinstance(exc, ExecuteExpression(handler[0], scope)):
 						subScope = VariableScope(scope, "asclause")
-						if handler[2]:
-							subScope.setVarRaw(handler[2], exc)
-						out = ExecuteStatList(handler[3], subScope)
+						if handler[1]:
+							subScope.setVarRaw(handler[1], exc)
+						out = ExecuteStatList(handler[2], subScope)
 						if out != None:
 							return out
 						break
