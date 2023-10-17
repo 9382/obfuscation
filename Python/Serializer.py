@@ -282,6 +282,8 @@ def simplify(Object):
 		objtype = type(Object)
 		if isinstance(Object, ast.AST):
 			# print(objtype, Object._fields)
+			if objtype == ast.Expr and type(Object.value) == ast.Constant:
+				return simplifyloop(ast.Pass())
 			out = []
 			if objtype in Expressions:
 				out.append(ExpressionToID[objtype])
