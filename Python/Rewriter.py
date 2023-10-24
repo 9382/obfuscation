@@ -35,10 +35,13 @@ OPTION_obscure_posargs = True
 # Occassionally inserts a bit of garbage (code that does, quite literally, nothing)
 OPTION_insert_junk = False
 
+# Adds useless annotation markers, E.g. x: int or def y() -> int:
+OPTION_add_useless_annotations = True
+
 # Attempts to figure out when if elif statements are used instead of exponentially indenting else statements
 OPTION_use_elif = True
 
-# Uses brackets in places where they are probably excessive, but could be worth having to be on the safe side
+# Uses brackets in places where they are probably excessive, but could be worth having to be on the safe side (this is barely coded :/)
 OPTION_extra_brackets = False
 
 # Attempts to determine when a doc string is present and excludes it from the output
@@ -559,6 +562,8 @@ def CreateExecutionLoop(code):
 		else:
 			raise ExecutorException(f"[!] Unimplemented expression type {exprType}")
 
+	#Fun fact: `obj: obj = "somevalue"` is valid even though obj was previously undefined, because annotation magic
+	AnnotationTypes = ["int", "str", "float", "list", "dict", "None"]
 	def ExecuteStatement(statement, scope):
 		nonlocal _DEBUG_LastStatement
 		_DEBUG_LastStatement = statement
@@ -572,16 +577,24 @@ def CreateExecutionLoop(code):
 
 		elif stType == ast.Assign:
 			value = ExecuteExpression(statement.value, scope)
+			if OPTION_add_useless_annotations:
+				if len(statement.targets) == 1 and type(t := statement.targets[0]) in [ast.Name, ast.Attribute, ast.Subscript]:
+					target = ExecuteExpression(t, scope) + ": " + random.choice(AnnotationTypes)
+					return f"{target} = {value}"
 			target = " = ".join([ExecuteExpression(t, scope) for t in statement.targets])
 			return f"{target} = {value}"
 
 		elif stType == ast.AnnAssign:
 			target = ExecuteExpression(statement.target, scope)
+			if OPTION_add_useless_annotations:
+				target = target + ": " + ExecuteExpression(statement.annotation, scope)
 			if statement.value:
 				value = ExecuteExpression(statement.value, scope)
 				return f"{target} = {value}"
+			elif OPTION_add_useless_annotations:
+				return target
 			else:
-				return #Who cares?
+				return #Who cares? literally the equivilant of a pass statement
 
 		elif stType == ast.AugAssign:
 			value = ExecuteExpression(statement.value, scope)
@@ -731,10 +744,11 @@ def CreateExecutionLoop(code):
 			args = HandleArgs(subScope, statement.args)
 			body = ExecuteStatList(statement.body, subScope)
 			out.extend(decorators)
+			returntype = (" -> "+random.choice(AnnotationTypes) if OPTION_add_useless_annotations else "")
 			if stType == ast.AsyncFunctionDef:
-				out.append(f"async def {name}({args}):")
+				out.append(f"async def {name}({args}){returntype}:")
 			else:
-				out.append(f"def {name}({args}):")
+				out.append(f"def {name}({args}){returntype}:")
 			out.extend(body)
 			return out
 
@@ -805,6 +819,9 @@ def CreateExecutionLoop(code):
 	def HandleArgs(scope, arguments):
 		#Setup
 		argString = []
+		def createVar(name, forceNormal):
+			text = scope.createVar(name, forceNormal=forceNormal)
+			return text + ": " + random.choice(AnnotationTypes) if (OPTION_add_useless_annotations and scope.scopeType != "lambda") else text
 
 		#Positionals
 		debugprint("Positionals",arguments.args,arguments.defaults)
@@ -813,12 +830,12 @@ def CreateExecutionLoop(code):
 			arg = arguments.args[i]
 			if i >= defaultOffset:
 				default = ExecuteExpression(arguments.defaults[i-defaultOffset], scope)
-				argString.append(f"{scope.createVar(arg.arg, forceNormal=not OPTION_obscure_posargs)}={default}")
+				argString.append(f"{createVar(arg.arg, not OPTION_obscure_posargs)}={default}")
 			else:
-				argString.append(f"{scope.createVar(arg.arg, forceNormal=not OPTION_obscure_posargs)}")
+				argString.append(f"{createVar(arg.arg, not OPTION_obscure_posargs)}")
 
 		if arguments.vararg:
-			argString.append(f"*{scope.createVar(arguments.vararg.arg, forceNormal=not OPTION_obscure_posargs)}")
+			argString.append(f"*{createVar(arguments.vararg.arg, not OPTION_obscure_posargs)}")
 		elif len(arguments.kwonlyargs) > 0:
 			argString.append("*")
 
@@ -827,12 +844,12 @@ def CreateExecutionLoop(code):
 			kwarg, default = arguments.kwonlyargs[i].arg, arguments.kw_defaults[i]
 			if default:
 				default = ExecuteExpression(default, scope)
-				argString.append(f"{scope.createVar(kwarg, forceNormal=True)}={default}")
+				argString.append(f"{createVar(kwarg, True)}={default}")
 			else:
-				argString.append(f"{scope.createVar(kwarg, forceNormal=True)}")
+				argString.append(f"{createVar(kwarg, True)}")
 
 		if arguments.kwarg:
-			argString.append(f"**{scope.createVar(arguments.kwarg.arg, forceNormal=True)}")
+			argString.append(f"**{createVar(arguments.kwarg.arg, True)}")
 
 		return ", ".join(argString)
 
