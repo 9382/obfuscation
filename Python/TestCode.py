@@ -205,6 +205,9 @@ print(5, a, b, c)
 x, y, z = {1:2, 4:5, 7:8}
 print(x, y, z)
 
+a = b = 5
+print(a, b)
+
 ## Testing variables being defined post-scope (yet still valid definitions)
 a1 = 5
 def a():
