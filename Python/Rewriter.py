@@ -15,6 +15,9 @@ OPTION_indent_char = "\t"
 # Attempts to ""obfuscate"" numbers by abstracting them. Slightly messy looking
 OPTION_obscure_numbers = False
 
+# Replaces strings with chr() compilation sequences
+OPTION_obscure_strings = True
+
 # Attempts to re-name variables with random text. Tries to avoid changing anything that could be a concern, but it isn't perfect. Also INCREDIBLY messy
 # Failures can be expected when using nonlocals/globals inside classes or using nonlocals weirdly
 # Does not currently respect __all__ exports, and will rename them
@@ -360,6 +363,8 @@ def CreateExecutionLoop(code):
 
 		if exprType == ast.Constant:
 			if type(expr.value) == str:
+				if OPTION_obscure_strings:
+					return "str().join(chr(x) for x in [" + ",".join(str(ord(x)) for x in expr.value) + "])"
 				if ShouldWrap:
 					out = WrapInQuotes(expr.value).replace("\n","\\n").replace("\0", "\\0")
 					if OPTION_insert_junk:
