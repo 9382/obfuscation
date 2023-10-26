@@ -1686,9 +1686,9 @@ print((function(C)
 	end
 
 	-- print(PrintTable(p))
-	deepModify(p, true)
-	-- print(PrintTable(p))
-	return true, serializer(p)
+	deepModify(p.Body, true)
+	-- print(PrintTable(p.Body))
+	return true, serializer(p.Body)
 end)([====[
 ]====]))
 --]]
@@ -1700,7 +1700,7 @@ return function(C)
 		return false,p
 	end
 
-	deepModify(p, true)
-	-- print(PrintTable(p))
-	return true, serializer(p)
+	deepModify(p.Body, true)
+	-- print(PrintTable(p.Body))
+	return true, serializer(p.Body)
 end

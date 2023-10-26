@@ -414,7 +414,7 @@ local function CreateExecutionLoop(ast)
 		--A type of 1 is a return
 		--A type of 2 is a break
 		--A type of 3 is a continue
-		for _, stat in iPairs(statList[1]) do
+		for _, stat in iPairs(statList) do
 			local out = executeStatement(stat, scope)
 			if Type(out) == "table" then
 				if not out.P then --Create an internal token
