@@ -1672,7 +1672,12 @@ local function deepModify(t, firstCall)
 	for a,b in next,t do
 		if type(b) == "table" and not checked[b] then
 			checked[b] = true
-			deepModify(b)
+			if b.AstType == "Statlist" then
+				deepModify(b)
+				t[a] = b[1]
+			else
+				deepModify(b)
+			end
 		end
 	end
 end
