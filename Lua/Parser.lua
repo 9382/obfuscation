@@ -1652,6 +1652,7 @@ local function deepModify(t, firstCall)
 	AssignKey(t,"Key",3)
 	if t.Constant ~= nil then --Override string form containing surrounding quotes with the constant
 		AssignKey(t,"Constant",0)
+		t.Data = nil
 	else
 		AssignKey(t,"Data",0)
 	end
