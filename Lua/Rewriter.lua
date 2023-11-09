@@ -1419,7 +1419,7 @@ local function WriteExpression(Expression, Scope)
 		if Expression.Base.AstType == "Function" then --Special case for anonymous function calling
 			Base = "(" .. Base .. ")"
 		end
-		local Argument = WriteExpression(Expression.Arguments[1], Scope)
+		local Argument = Expression.Arguments[1].Data
 		if not RewriterOptions.UseShortCallExprs then
 			Argument = "(" .. Argument .. ")"
 		end
@@ -1490,7 +1490,7 @@ local function WriteExpression(Expression, Scope)
 		return "(" .. WriteExpression(Expression.Lhs, Scope) .. ConsiderSpacingOperator(Expression.Op) .. WriteExpression(Expression.Rhs, Scope) .. ")"
 
 	end
-	error("We didn't return on a expression!? " .. tostring(Expression))
+	error("We didn't return on a expression!? " .. tostring(Expression) .. " " .. (type(Expression)=="table" and tostring(Expression.AstType) or "<no AST>"))
 end
 
 local function WriteStatement(Statement, Scope)
