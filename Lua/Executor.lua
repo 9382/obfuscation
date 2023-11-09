@@ -155,7 +155,11 @@ local function CreateExecutionLoop(ast)
 			else
 				EvaluateExpressionList(expr[2], args, scope)
 			end
-			return executeExpression(expr[0], scope)(SafeUnpack(args))
+			if expr[3] then --subtle truncation via extra parenthesis
+				return ({executeExpression(expr[0], scope)(SafeUnpack(args))})[1] --damn luamin doesn't let me make this a subtle truncation itself
+			else
+				return executeExpression(expr[0], scope)(SafeUnpack(args))
+			end
 
 		elseif AstType == 8 then
 			return Tonumber(expr[1][0])

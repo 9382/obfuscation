@@ -1540,6 +1540,7 @@ local function deepModify(t, firstCall)
 	t.CanRename = nil
 	t.Print = nil
 	t.LeadingWhite = nil
+	local ParenCount = t.ParenCount or 0
 	t.ParenCount = nil
 
 	--Fix table:func() assignment issues before runtime
@@ -1574,6 +1575,9 @@ local function deepModify(t, firstCall)
 				Local.Name = GetUniqueLocal(Local.Name)
 			end
 		end
+	end
+	if ({CallExpr=1, StringCallExpr=1, TableCallExpr=1})[t.AstType] then
+		t[3] = ParenCount > 0 --subtle truncation via parenthesis
 	end
 	if t.IsLocal and t.Name then --Functions
 		--Somehow ParseSimpleExpr can generate a nameless but local function. /shrug
