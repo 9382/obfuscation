@@ -146,34 +146,28 @@ local function CreateExecutionLoop(ast)
 				return executeExpression(expr[0], scope)[executeExpression(expr[1], scope)]
 			end
 
-		elseif AstType == 5
-		or     AstType == 6
-		or     AstType == 7 then
+		elseif AstType == 5 then
 			local args = {}
-			if AstType == 6 then
-				args = {expr[2][1][0]}
-			else
-				EvaluateExpressionList(expr[2], args, scope)
-			end
+			EvaluateExpressionList(expr[2], args, scope)
 			if expr[3] then --subtle truncation via extra parenthesis
 				return ({executeExpression(expr[0], scope)(SafeUnpack(args))})[1] --damn luamin doesn't let me make this a subtle truncation itself
 			else
 				return executeExpression(expr[0], scope)(SafeUnpack(args))
 			end
 
-		elseif AstType == 8 then
+		elseif AstType == 6 then
 			return Tonumber(expr[1][0])
 
-		elseif AstType == 9 then
+		elseif AstType == 7 then
 			return expr[1][0]
 
-		elseif AstType == 10 then
+		elseif AstType == 8 then
 			return Nil
 
-		elseif AstType == 11 then
+		elseif AstType == 9 then
 			return expr[1]
 
-		elseif AstType == 12 then
+		elseif AstType == 10 then
 			-- -1 is the reserved LocalID for local "..."
 			if expr[0] then
 				return scope:GL(-1)[1][1]
@@ -181,7 +175,7 @@ local function CreateExecutionLoop(ast)
 				return SafeUnpack(scope:GL(-1)[1], True)
 			end
 
-		elseif AstType == 13 then
+		elseif AstType == 11 then
 			local out = {}
 			--Process all key'd entries first
 			local unkeyed = {}
@@ -198,7 +192,7 @@ local function CreateExecutionLoop(ast)
 			EvaluateExpressionList(unkeyed, out, scope)
 			return out
 
-		elseif AstType == 14 then
+		elseif AstType == 12 then
 			local Rhs = executeExpression(expr[0], scope)
 			local op = expr[2]
 			if op == 1 then
@@ -209,7 +203,7 @@ local function CreateExecutionLoop(ast)
 				return #Rhs
 			end
 
-		elseif AstType == 15 then
+		elseif AstType == 13 then
 			local op = expr[2]
 			local Lhs = executeExpression(expr[1], scope)
 			--The RHS should only be evaluated for and/or if the LHS doesn't complete the condition

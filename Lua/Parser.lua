@@ -1484,9 +1484,8 @@ local StatementSet = {
 local AstTypeToID = {
 	Statlist=nil, Function=1,
 
-	--[[Function=1, ]]VarExpr=2, MemberExpr=3, IndexExpr=4, CallExpr=5, StringCallExpr=6,
-	TableCallExpr=7, NumberExpr=8, StringExpr=9, NilExpr=10, BooleanExpr=11,
-	DotsExpr=12, ConstructorExpr=13, UnopExpr=14, BinopExpr=15,
+	--[[Function=1, ]]VarExpr=2, MemberExpr=3, IndexExpr=4, CallExpr=5, NumberExpr=6, StringExpr=7,
+	NilExpr=8, BooleanExpr=9, DotsExpr=10, ConstructorExpr=11, UnopExpr=12, BinopExpr=13,
 
 	--[[Function=1, ]]IfStatement=2, WhileStatement=3, DoStatement=4, NumericForStatement=5,
 	GenericForStatement=6, RepeatStatement=7, LocalStatement=8, ReturnStatement=9,
@@ -1542,6 +1541,14 @@ local function deepModify(t, firstCall)
 	t.LeadingWhite = nil
 	local ParenCount = t.ParenCount or 0
 	t.ParenCount = nil
+
+	--Merge similar expressions that have identical functionality
+	if t.AstType == "TableCallExpr" then
+		t.AstType = "CallExpr" --trivial conversion
+	elseif t.AstType == "StringCallExpr" then
+		t.AstType = "CallExpr"
+		t.Arguments[1] = {AstType="StringExpr", Value=t.Arguments[1]}
+	end
 
 	--Fix table:func() assignment issues before runtime
 	if t.AstType == "Function" and t.Name and t.Name.Indexer == ":" then
