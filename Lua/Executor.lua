@@ -126,7 +126,7 @@ local function CreateExecutionLoop(ast)
 				return expr, True
 			else
 				if expr[2] == False then
-					return executeExpression(expr[0], scope)[expr[1][0]]
+					return executeExpression(expr[0], scope)[executeExpression(expr[1], scope)]
 				elseif expr[2] == True then --Account for namecall calls of functions by forcing in a self
 					local Container = executeExpression(expr[0], scope)
 					local out = Container[expr[1][0]]
@@ -141,13 +141,6 @@ local function CreateExecutionLoop(ast)
 			end
 
 		elseif AstType == 4 then
-			if SpecialState then
-				return expr, True
-			else
-				return executeExpression(expr[0], scope)[executeExpression(expr[1], scope)]
-			end
-
-		elseif AstType == 5 then
 			local args = {}
 			EvaluateExpressionList(expr[2], args, scope)
 			if expr[3] then --subtle truncation via extra parenthesis
@@ -156,19 +149,19 @@ local function CreateExecutionLoop(ast)
 				return executeExpression(expr[0], scope)(SafeUnpack(args))
 			end
 
-		elseif AstType == 6 then
+		elseif AstType == 5 then
 			return Tonumber(expr[1][0])
 
-		elseif AstType == 7 then
+		elseif AstType == 6 then
 			return expr[1][0]
 
-		elseif AstType == 8 then
+		elseif AstType == 7 then
 			return Nil
 
-		elseif AstType == 9 then
+		elseif AstType == 8 then
 			return expr[1]
 
-		elseif AstType == 10 then
+		elseif AstType == 9 then
 			-- -1 is the reserved LocalID for local "..."
 			if expr[0] then
 				return scope:GL(-1)[1][1]
@@ -176,7 +169,7 @@ local function CreateExecutionLoop(ast)
 				return SafeUnpack(scope:GL(-1)[1], True)
 			end
 
-		elseif AstType == 11 then
+		elseif AstType == 10 then
 			local out = {}
 			--Process all key'd entries first
 			local unkeyed = {}
@@ -193,7 +186,7 @@ local function CreateExecutionLoop(ast)
 			EvaluateExpressionList(unkeyed, out, scope)
 			return out
 
-		elseif AstType == 12 then
+		elseif AstType == 11 then
 			local Rhs = executeExpression(expr[0], scope)
 			local op = expr[2]
 			if op == 1 then
@@ -204,7 +197,7 @@ local function CreateExecutionLoop(ast)
 				return #Rhs
 			end
 
-		elseif AstType == 13 then
+		elseif AstType == 12 then
 			local op = expr[2]
 			local Lhs = executeExpression(expr[1], scope)
 			--The RHS should only be evaluated for and/or if the LHS doesn't complete the condition

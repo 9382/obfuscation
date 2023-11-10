@@ -1484,8 +1484,8 @@ local StatementSet = {
 local AstTypeToID = {
 	Statlist=nil, Function=1,
 
-	--[[Function=1, ]]VarExpr=2, MemberExpr=3, IndexExpr=4, CallExpr=5, NumberExpr=6, StringExpr=7,
-	NilExpr=8, BooleanExpr=9, DotsExpr=10, ConstructorExpr=11, UnopExpr=12, BinopExpr=13,
+	--[[Function=1, ]]VarExpr=2, MemberExpr=3, CallExpr=4, NumberExpr=5, StringExpr=6,
+	NilExpr=7, BooleanExpr=8, DotsExpr=9, ConstructorExpr=10, UnopExpr=11, BinopExpr=12,
 
 	--[[Function=1, ]]IfStatement=2, WhileStatement=3, DoStatement=4, NumericForStatement=5,
 	GenericForStatement=6, RepeatStatement=7, LocalStatement=8, ReturnStatement=9,
@@ -1548,6 +1548,15 @@ local function deepModify(t, firstCall)
 	elseif t.AstType == "StringCallExpr" then
 		t.AstType = "CallExpr"
 		t.Arguments[1] = {AstType="StringExpr", Value=t.Arguments[1]}
+	end
+	if t.AstType == "IndexExpr" then
+		t.AstType = "MemberExpr"
+		t.Indexer = "."
+		t.Ident = t.Index
+		t.Index = nil
+	elseif t.AstType == "MemberExpr" and t.Indexer == "." then
+		--this is butchering the normal structure a bit since we dont expect an expression but whatever
+		t.Ident = {AstType="StringExpr", Value={Data=t.Ident.Data}} --MORE STUPID DATA STUFF WHY DO WE HAVE THIS?
 	end
 
 	--Fix table:func() assignment issues before runtime
