@@ -47,7 +47,7 @@ local function CreateExecutionLoop(ast)
 	local function GetVarargsInfo(...)
 		return {...}, Select("#", ...)
 	end
-	local function EvaluateExpressionList(ExpressionList, Container, scope, startIndex)
+	local function EvaluateExpressionList(ExpressionList, Container, scope)
 		--Evaluates expressions in a way that handles lua's value truncation, E.g.
 		---- < local a,b,c,d,e = (function()return 1,2,3,4,5 end)(), (function()return 3 end)(); print(a,b,c,d,e)
 		---- > 1 3 nil nil nil
@@ -85,7 +85,8 @@ local function CreateExecutionLoop(ast)
 			return function(...)
 				local childScope = CreateExecutionScope(scope)
 				local inputArgs = {...}
-				for i = 1,#expr[2] do
+				local standardArgs = #expr[2]
+				for i = 1, standardArgs do
 					local arg = expr[2][i]
 					if arg then
 						childScope:ML(arg[0], inputArgs[i])
@@ -94,8 +95,8 @@ local function CreateExecutionLoop(ast)
 				if expr[3] then
 					local inputArgCount = Select("#", ...)
 					local varargs = {}
-					for i = #expr[2]+1, inputArgCount do
-						varargs[#varargs+1] = inputArgs[i]
+					for i = standardArgs+1, inputArgCount do
+						varargs[i-standardArgs] = inputArgs[i]
 					end
 					AmbiguityTracker[varargs] = {nil, inputArgCount-#expr[2]+1}
 					childScope:ML(-1, varargs) -- -1 is the reserved LocalID for local "..."
