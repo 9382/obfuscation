@@ -1268,7 +1268,7 @@ local RewriterOptions = {
 
 	--== ObscureVariableNames ==--
 	-- Replaces local variable names with complete garbage. The variable must be localised
-	ObscureVariableNames = true,
+	ObscureVariableNames = false,
 
 	--== ObscureNumbers / ObscureStrings / ObscureGlobals ==--
 	-- Turns normal expressions into complex ones
@@ -1284,7 +1284,7 @@ local RewriterOptions = {
 
 	--== AddJunkCode ==--
 	-- This adds code that serves no purpose functionally
-	AddJunkCode = true,
+	AddJunkCode = false,
 
 	--== JunkCodeChance ==--
 	-- The chance at each statement that junk code is added if enabled
