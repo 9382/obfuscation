@@ -1576,8 +1576,11 @@ local function deepModify(t, firstCall)
 			end
 		end
 	end
+	--subtle truncation via parenthesis
 	if ({CallExpr=1, StringCallExpr=1, TableCallExpr=1})[t.AstType] then
-		t[3] = ParenCount > 0 --subtle truncation via parenthesis
+		t[3] = ParenCount > 0
+	elseif t.AstType == "DotsExpr" then
+		t[0] = ParenCount > 0
 	end
 	if t.IsLocal and t.Name then --Functions
 		--Somehow ParseSimpleExpr can generate a nameless but local function. /shrug

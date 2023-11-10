@@ -174,7 +174,12 @@ local function CreateExecutionLoop(ast)
 			return expr[1]
 
 		elseif AstType == 12 then
-			return SafeUnpack(scope:GL(-1)[1], True) -- -1 is the reserved LocalID for local "..."
+			-- -1 is the reserved LocalID for local "..."
+			if expr[0] then
+				return scope:GL(-1)[1][1]
+			else
+				return SafeUnpack(scope:GL(-1)[1], True)
+			end
 
 		elseif AstType == 13 then
 			local out = {}
