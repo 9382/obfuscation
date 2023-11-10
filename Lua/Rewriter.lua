@@ -1365,6 +1365,7 @@ end
 
 local WriteStatList
 local function WriteExpression(Expression, Scope)
+	Expression.ParenCount = Expression.ParenCount or 0
 	if Expression.AstType == "Function" then
 		local SubScope = CreateExecutionScope(Scope)
 		local NewArguments = {}
@@ -1412,29 +1413,31 @@ local function WriteExpression(Expression, Scope)
 		for i,Argument in ipairs(Expression.Arguments) do
 			NewArguments[i] = WriteExpression(Argument, Scope)
 		end
-		return Base .. "(" .. table.concat(NewArguments, CommaSplitter) .. ")"
+		if Expression.ParenCount > 0 then
+			return "(" .. Base .. "(" .. table.concat(NewArguments, CommaSplitter) .. "))" --subtle truncation
+		else
+			return Base .. "(" .. table.concat(NewArguments, CommaSplitter) .. ")"
+		end
 
-	elseif Expression.AstType == "StringCallExpr" then
+	elseif Expression.AstType == "StringCallExpr" or Expression.AstType == "TableCallExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
 		if Expression.Base.AstType == "Function" then --Special case for anonymous function calling
 			Base = "(" .. Base .. ")"
 		end
-		local Argument = Expression.Arguments[1].Data
+		local Argument
+		if Expression.AstType == "StringCallExpr" then
+			Argument = Expression.Arguments[1].Data
+		else
+			Argument = WriteExpression(Expression.Arguments[1], Scope)
+		end
 		if not RewriterOptions.UseShortCallExprs then
 			Argument = "(" .. Argument .. ")"
 		end
-		return Base .. Argument
-
-	elseif Expression.AstType == "TableCallExpr" then
-		local Base = WriteExpression(Expression.Base, Scope)
-		if Expression.Base.AstType == "Function" then --Special case for anonymous function calling
-			Base = "(" .. Base .. ")"
+		if Expression.ParenCount > 0 then
+			return "(" .. Base .. Argument .. ")"
+		else
+			return Base .. Argument
 		end
-		local Argument = WriteExpression(Expression.Arguments[1], Scope)
-		if not RewriterOptions.UseShortCallExprs then
-			Argument = "(" .. Argument .. ")"
-		end
-		return Base .. Argument
 
 	elseif Expression.AstType == "NumberExpr" then
 		local NumberValue = tonumber(Expression.Value.Data)
@@ -1463,7 +1466,11 @@ local function WriteExpression(Expression, Scope)
 		return tostring(Expression.Value)
 
 	elseif Expression.AstType == "DotsExpr" then
-		return "..." --so complex!
+		if Expression.ParenCount > 0 then
+			return "(...)" --subtle truncation
+		else
+			return "..." --so complex!
+		end
 
 	elseif Expression.AstType == "ConstructorExpr" then
 		local Parts = {}
