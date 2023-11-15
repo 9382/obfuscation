@@ -422,6 +422,7 @@ local function CreateExecutionLoop(ast)
 
 	return (function()
 		ast = (function(x)
+			local log2 = mathlog(2)
 			local function padleft(s,n,p)
 				return stringrep(p,n-#s)..s
 			end
@@ -433,7 +434,7 @@ local function CreateExecutionLoop(ast)
 				if n == 0 then
 					return padleft("0",pad or 1,"0")
 				end
-				local pow = mathfloor(mathlog(n,2))
+				local pow = mathfloor(mathlog(n)/log2)
 				local final = ""
 				while pow >= 0 do
 					local p2 = 2^pow

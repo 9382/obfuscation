@@ -1268,6 +1268,7 @@ function ParseLua(src)
 end
 
 local bitmanager = (function()
+	local log2 = math.log(2)
 	local function padleft(s,n,p)
 		return string.rep(p,n-#s)..s
 	end
@@ -1286,7 +1287,7 @@ local bitmanager = (function()
 				return "0"
 			end
 		end
-		local pow = math.floor(math.log(n,2))
+		local pow = math.floor(math.log(n)/log2)
 		local final = ""
 		while true do
 			if n >= 2^pow then
@@ -1358,7 +1359,7 @@ local bitmanager = (function()
 		local integral,fractional = math.modf(double)
 		local RequiredBuffer = 0
 		if fractional ~= 0 then
-			RequiredBuffer = math.max(math.floor(math.log(1/fractional,2)),0)
+			RequiredBuffer = math.max(math.floor(math.log(1/fractional)/log2),0)
 		end
 		--Buffer is required should the default 53 bits not be enough data due to a large shift when normalizing the scientific.
 		--AKA: If 1 does not appear as early as 0.1[...] then normalization fails due to lack of data - that bad, so generate more
