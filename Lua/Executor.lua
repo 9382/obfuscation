@@ -245,8 +245,7 @@ local function CreateExecutionLoop(ast)
 			if name[5] == 3 then
 				local Container = executeExpression(name[0], scope)
 				if name[2] == False then
-					local f = executeExpression(statement, scope)
-					Container[name[1][0]] = f
+					Container[executeExpression(name[1], scope)] = executeExpression(statement, scope)
 				elseif name[2] == True then --Special flag call to ensure self logic
 					local f = executeExpression(statement, scope, True)
 					Container[name[1][0]] = f
@@ -388,11 +387,7 @@ local function CreateExecutionLoop(ast)
 							FunctionEnvironment[Lhs[0]] = ShouldFullyEvaluate(i)
 						end
 
-					elseif Lhs[5] == 3 then
-						local Container = executeExpression(Lhs[0], scope)
-						Container[Lhs[1][0]] = ShouldFullyEvaluate(i)
-
-					else--if Lhs[5] == 4 then
+					else--if Lhs[5] == 3 then
 						local Container = executeExpression(Lhs[0], scope)
 						Container[executeExpression(Lhs[1], scope)] = ShouldFullyEvaluate(i)
 
