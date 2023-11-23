@@ -1400,7 +1400,7 @@ local function WriteExpression(Expression, Scope)
 
 	elseif Expression.AstType == "CallExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
-		if Expression.Base.AstType == "Function" then --Special case for anonymous function calling
+		if Expression.Base.AstType == "Function" or Expression.Base.AstType == "NilExpr" then --Special case for anonymous function calling
 			Base = "(" .. Base .. ")"
 		end
 		if RewriterOptions.UseShortCallExprs and #Expression.Arguments == 1 then
