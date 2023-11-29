@@ -1246,6 +1246,190 @@ end
 
 --== BEGIN REWRITER ==--
 
+--[[ Control Flow Flattener
+Flattens the control into a straight-line format, with each statement being split up
+
+Steps:
+1) Collect locals and define them at the top of the control flow
+2) Turn each statement into a seperate number index for flattening
+
+Some special rules to consider:
+statements that end or direct the flow will need special logic, E.g.
+A continue statement must go to the start of the loop
+A break statement must go to the first statement after the loop
+A return statement may not need rewriting?
+
+Notes/warnings about implementation:
+I consider this to be a "weak flattening" implementation
+By this, I mean that if statements are treated like functions instead of being flattened into the current control flow
+I intend to possibly make a strong flattening version, but only once weak is made so I have a point I can return to if I screw up
+Note that defining a local twice (local x; local x) can cause some unexpected behaviour and may produce wrong code
+
+This entire process of "control flattening" is very difficult to do in lua, considering scopes are very closed
+Most languages bring in new scopes per function, but we get new scopes per any sort of Body entry (Like an If statement)
+This forces us to do some quite ugly and unreliable self-management
+--]]
+local function FlattenControlFlow(ast)
+	local function PerformFlattening(Body)
+		local NewAST = {}
+		--Step 1: Variable collection
+		local Variables = {}
+		local InstructionPointer = "__ins" .. math.random(1e4,1e5-1) .. "__"
+		local InstructionExpression = {AstType="VarExpr", Name=InstructionPointer, Local={CanRename=true, Scope=Body.Scope, Name=InstructionPointer}}
+		Variables[1] = InstructionPointer
+		for _,Statement in ipairs(Body) do
+			if Statement.AstType == "LocalStatement" then
+				for _,Name in next,Statement.LocalList do
+					Variables[#Variables+1] = Name.Name
+				end
+			elseif Statement.AstType == "Function" then
+				if Statement.IsLocal then
+					Variables[#Variables+1] = Statement.Name.Name
+				end
+			end
+		end
+		for i,Variable in next,Variables do
+			Variables[i] = {CanRename=true, Scope=Body.Scope, Name=Variable}
+		end
+		NewAST[1] = {
+			AstType = "LocalStatement",
+			LocalList = Variables,
+			InitList = {{AstType="NumberExpr", Value={Data="1"}}},
+		}
+
+		--Step 2: Compile the statements
+		local CollectedStatements = {}
+		local function CreateInstructionCheck(index)
+			return {
+				AstType="BinopExpr", Op="==",
+				Rhs={AstType="NumberExpr", Value={Data=tostring(index)}},
+				Lhs=InstructionExpression,
+			}
+		end
+		local function StandardProcedure(Statement, index)
+			return {
+				Body = {AstType="Statlist", Scope=Body.Scope, Body={
+					Statement,
+					{AstType="AssignmentStatement", Lhs={InstructionExpression}, Rhs={{AstType="NumberExpr", Value={Data=tostring(index+1)}}}}
+				}},
+				Condition = CreateInstructionCheck(index)
+			}
+		end
+		for _,Statement in ipairs(Body) do
+			local index = #CollectedStatements+1
+
+			--Special ones
+			if Statement.AstType == "LocalStatement" then
+				Statement.AstType = "AssignmentStatement"
+				Statement.Lhs = Statement.LocalList
+				for i,Lhs in ipairs(Statement.Lhs) do
+					Statement.Lhs[i] = {AstType="VarExpr", Name=Lhs.Name, Local={CanRename=true, Scope=Body.Scope, Name=Lhs.Name}}
+				end
+				Statement.Rhs = Statement.InitList
+				if #Statement.Rhs == 0 then
+					Statement.Rhs = {{AstType="NilExpr"}}
+				end
+				Statement.InitList = nil
+				Statement.LocalList = nil
+				CollectedStatements[index] = StandardProcedure(Statement, index)
+
+			elseif Statement.AstType == "Function" and Statement.IsLocal then
+				Statement.IsLocal = false
+				local FuncName = Statement.Name.Name
+				Statement.Body.Body = PerformFlattening(Statement.Body.Body)
+				CollectedStatements[index] = StandardProcedure({
+					AstType = "AssignmentStatement",
+					Lhs = {{AstType="VarExpr", Name=FuncName, Local={CanRename=true, Scope=Body.Scope, name=FuncName}}},
+					Rhs = {Statement},
+				}, index)
+
+			elseif Statement.AstType == "ReturnStatement" then
+				local out = StandardProcedure(Statement, index)
+				out.Body.Body[2] = nil
+				CollectedStatements[index] = out
+
+			elseif Statement.AstType == "IfStatement" then --THIS IS WEAK
+				--If this was strong, each condition would set __ins__ to a reserved ID section that had the if's code
+				for i,Clause in ipairs(Statement.Clauses) do
+					Clause.Body.Body = PerformFlattening(Clause.Body.Body)
+					-- Clause.Body.Body[#Clause.Body.Body+1] = {AstType="AssignmentStatement", Lhs={InstructionExpression}, Rhs={{AstType="NumberExpr", Value={Data=tostring(index+1)}}}}
+				end
+				local out = StandardProcedure(Statement, index)
+				-- out.Body.Body[2] = nil
+				CollectedStatements[index] = out
+
+			elseif Statement.AstType == "WhileStatement" then --THIS IS WEAK
+				--If this was strong, the condition would be implemented like a statement and flow would split from there
+				Statement.Body.Body = PerformFlattening(Statement.Body.Body)
+				CollectedStatements[index] = StandardProcedure(Statement, index)
+
+			elseif Statement.AstType == "RepeatStatement" then --THIS IS WEAK
+				--If this was strong, the condition would be implemented like a statement and flow would split from there
+				Statement.Body.Body = PerformFlattening(Statement.Body.Body)
+				CollectedStatements[index] = StandardProcedure(Statement, index)
+
+			elseif Statement.AstType == "DoStatement" then --THIS IS WEAK
+				--If this was strong, it would just ignore the do (note that we would need advanced handling of locals to flatten safely! especially considering do is used for local reasons)
+				local out = StandardProcedure(false, index)
+				Statement = PerformFlattening(Statement.Body.Body)
+				local outBody = out.Body.Body
+				outBody[3] = outBody[2]
+				outBody[1], outBody[2] = Statement[1], Statement[2]
+				CollectedStatements[index] = out
+
+			elseif Statement.AstType == "CallStatement" then
+				local Base = Statement.Expression.Base
+				if Base.AstType == "Function" then
+					Base.Body.Body = PerformFlattening(Base.Body.Body)
+				end
+				CollectedStatements[index] = StandardProcedure(Statement, index)
+
+			elseif Statement.AstType == "NumericForStatement" or Statement.AstType == "GenericForStatement" then --THIS IS WEAK
+				Statement.Body.Body = PerformFlattening(Statement.Body.Body)
+				CollectedStatements[index] = StandardProcedure(Statement, index)
+
+			--Else, normal stuff
+			else
+				CollectedStatements[index] = StandardProcedure(Statement, index)
+			end
+		end
+
+		--Step 3: Shuffle the statement order for obscurity
+		--TODO: Actually change instruction numbers too for extra obscurity
+		local ToShuffle = {}
+		for a,b in next,CollectedStatements do
+			ToShuffle[a] = b
+		end
+		CollectedStatements={}
+		while #ToShuffle>0 do
+			CollectedStatements[#CollectedStatements+1] = table.remove(ToShuffle, math.random(1, #ToShuffle))
+		end
+
+		--Wrap it up
+		NewAST[2] = {
+			AstType = "WhileStatement",
+			Condition = {
+				AstType = "BinopExpr",
+				Op = "<=",
+				Rhs = {AstType="NumberExpr", Value={Data=tostring(#Body)}},
+				Lhs = InstructionExpression,
+			},
+			Body = {
+				AstType = "Statlist",
+				Scope = Body.Scope,
+				Body = {{
+					AstType = "IfStatement",
+					Clauses = CollectedStatements
+				}}
+			}
+		}
+
+		--Done!
+		return NewAST
+	end
+	ast.Body = PerformFlattening(ast.Body)
+end
+
 local RewriterOptions = {
 	--== IndentCharacter ==--
 	-- The character used for indenting
@@ -1289,6 +1473,11 @@ local RewriterOptions = {
 	--== JunkCodeChance ==--
 	-- The chance at each statement that junk code is added if enabled
 	JunkCodeChance = 3/3,
+
+	--== PerformCodeFlattening ==--
+	-- Performs code flattening to help obscure the normal flow of the function
+	-- Note: Current flattening is weak and potentially unreliable, use with caution
+	PerformCodeFlattening = false,
 }
 
 -- RewriterOptions helper functions
@@ -1755,6 +1944,10 @@ print((function(C)
 
 	if not RewriterOptions.UseNewlines and not RewriterOptions.UseSemicolons then
 		print("WARNING: Semicolons should really be used when no newlines are present")
+	end
+
+	if RewriterOptions.PerformCodeFlattening then
+		FlattenControlFlow(p)
 	end
 
 	local result = WriteStatList(p, CreateExecutionScope(), true)
