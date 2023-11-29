@@ -1337,6 +1337,7 @@ local function FlattenControlFlow(ast)
 				Statement.IsLocal = false
 				local FuncName = Statement.Name.Name
 				Statement.Body.Body = PerformFlattening(Statement.Body.Body)
+				Statement.Modified = true
 				CollectedStatements[index] = StandardProcedure({
 					AstType = "AssignmentStatement",
 					Lhs = {{AstType="VarExpr", Name=FuncName, Local={CanRename=true, Scope=Body.Scope, name=FuncName}}},
@@ -1381,6 +1382,7 @@ local function FlattenControlFlow(ast)
 				local Base = Statement.Expression.Base
 				if Base.AstType == "Function" then
 					Base.Body.Body = PerformFlattening(Base.Body.Body)
+					Base.Modified = true
 				end
 				CollectedStatements[index] = StandardProcedure(Statement, index)
 
@@ -1391,6 +1393,34 @@ local function FlattenControlFlow(ast)
 			--Else, normal stuff
 			else
 				CollectedStatements[index] = StandardProcedure(Statement, index)
+			end
+
+			--Catch uncaught functions (this code will cause any sane person to cry for days on end)
+			for k1,v1 in next,Statement do
+				if type(v1) == "table" then
+					if v1.AstType == "Function" and not v1.Modified then
+						v1.Body.Body = PerformFlattening(v1.Body.Body)
+						v1.Modified = true
+					else
+						for k2,v2 in next,v1 do
+							if type(v2) == "table" then
+								if v2.AstType == "Function" and not v2.Modified then
+									v2.Body.Body = PerformFlattening(v2.Body.Body)
+									v2.Modified = true
+								else
+									for k3,v3 in next,v2 do
+										if type(v3) == "table" then
+											if v3.AstType == "Function" and not v3.Modified then
+												v3.Body.Body = PerformFlattening(v3.Body.Body)
+												v3.Modified = true
+											end
+										end
+									end
+								end
+							end
+						end
+					end
+				end
 			end
 		end
 
