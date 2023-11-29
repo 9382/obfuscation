@@ -225,3 +225,20 @@ def c():
 	return c1, c2, c3, c4
 [c3, c4] = [3, 4]
 print(c())
+
+## __qualname__ tests
+def y():
+	class x:
+		def __init__(self):
+			print("init", self)
+		def z():
+			return 1
+	return x
+
+def printqualname(name, obj):
+	print("qualname obj=", name, "qualname=", obj.__qualname__, "repr=", repr(obj))
+printqualname("y", y)
+x = y()
+printqualname("x", x)
+printqualname("x.z", x.z)
+printqualname("x().z", x().z)
