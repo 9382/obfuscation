@@ -1419,15 +1419,18 @@ local function FlattenControlFlow(ast)
 		end
 		local function CollectInstructionsFromBody(Body)
 			local CollectedInstructions = {}
-			local function ForceGoToInstruction(t, ins, blacklist) --DeepScan3 :):):):)
+			local function ForceGoToInstruction(t, ins, old, blacklist) --DeepScan3 :):):):)
 				blacklist = blacklist or {}
 				blacklist[t] = true
 				for k,v in next,t do
 					if type(v) == "table" and k ~= "Scope" and not blacklist[v] then
 						if v.AstType == "AssignmentStatement" and v.Lhs[1] == InstructionExpression then
-							v.Rhs[1].Value.Data = tostring(ins)
+							local Value = v.Rhs[1].Value
+							if not old or tonumber(Value.Data) == old then
+								Value.Data = tostring(ins)
+							end
 						else
-							ForceGoToInstruction(v, ins, blacklist)
+							ForceGoToInstruction(v, ins, old, blacklist)
 						end
 					end
 				end
@@ -1466,9 +1469,8 @@ local function FlattenControlFlow(ast)
 
 				elseif Statement.AstType == "IfStatement" then
 					local Clauses = Statement.Clauses
-					local ClauseToInstruction = {}
 					CollectedInstructions[index] = {}
-					local LastInstructions = {}
+					local AllInstructions = {}
 					local HasACatchAll = not Statement.Clauses[#Statement.Clauses].Condition
 					if not HasACatchAll then
 						Statement.Clauses[#Statement.Clauses+1] = {Body={AstType="Stalist", Scope=Body.Scope, Body={}}} --this just works with no adjustment, /shrug
@@ -1476,14 +1478,24 @@ local function FlattenControlFlow(ast)
 
 					for i,Clause in next,Statement.Clauses do
 						local SubInstructions = CollectInstructionsFromBody(Clause.Body.Body)
-						ClauseToInstruction[i] = #CollectedInstructions+1
 						Clause.Body.Body = {{AstType="AssignmentStatement", Lhs={InstructionExpression}, Rhs={{AstType="NumberExpr", Value={Data=tostring(#CollectedInstructions+1)}}}}}
-						LastInstructions[#LastInstructions+1] = SubInstructions[#SubInstructions]
+
+						if #SubInstructions == 0 then
+							local FakeInstruction = StandardProcedure({}, 1)
+							FakeInstruction.Body.Body[1] = FakeInstruction.Body.Body[2]
+							FakeInstruction.Body.Body[2] = nil
+							SubInstructions[1] = FakeInstruction
+						end
+
+						for _,Instruction in next,SubInstructions do
+							AllInstructions[#AllInstructions+1] = {Instruction, #SubInstructions+#CollectedInstructions+1}
+						end
+
 						ExtendInstructions(CollectedInstructions, SubInstructions)
 					end
 					local ExitInstruction = #CollectedInstructions+1
-					for i = 1, #LastInstructions do
-						ForceGoToInstruction(LastInstructions[i], ExitInstruction)
+					for i = 1, #AllInstructions do --Ensure all final instructions from each subset exit at the end of the main if instruction
+						ForceGoToInstruction(AllInstructions[i][1], ExitInstruction, AllInstructions[i][2])
 					end
 
 					local out = StandardProcedure(Statement, index)
@@ -1548,7 +1560,7 @@ local function FlattenControlFlow(ast)
 			Condition = {
 				AstType = "BinopExpr",
 				Op = "<=",
-				Rhs = {AstType="NumberExpr", Value={Data=tostring(#Body)}},
+				Rhs = {AstType="NumberExpr", Value={Data=tostring(#CollectedInstructions)}},
 				Lhs = InstructionExpression,
 			},
 			Body = {
@@ -2090,7 +2102,49 @@ print((function(C)
 	local result = WriteStatList(p, CreateExecutionScope(), true)
 	return true, table.concat(result,"\n")
 end)([==[
-print("Test")
+print("Start")
+
+local function test(x)
+	if x < 5 then
+		if x < 4 then
+			if x > 2 then
+				print("x == 3")
+			end
+			if x > 1 then
+				print("2 <= x <= 3")
+			else
+				print("x == 1")
+			end
+		else
+			print("x == 4")
+		end
+		print("x < 5")
+	elseif x < 10 then
+		if x > 7 then
+			if x < 9 then
+				print("x == 8")
+			elseif x < 8 then
+				print("FAIL CASE")
+			elseif x < 10 then
+				print("x == 9")
+			end
+		elseif x > 6 then
+			print("x == 7")
+		else
+			if x == 5 then
+				print("x == 5")
+			end
+			print("5 <= x <= 6")
+		end
+	else
+		print("x >= 10")
+	end
+	print()
+end
+
+test(1); test(2); test(3); test(4); test(5); test(6); test(7); test(8); test(9); test(10)
+
+print("Done")
 ]==]))
 
 return function(C)
