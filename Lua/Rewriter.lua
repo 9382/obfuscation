@@ -1259,11 +1259,9 @@ A continue statement must go to the start of the loop
 A break statement must go to the first statement after the loop
 A return statement may not need rewriting?
 
-Notes/warnings about implementation:
-I consider this to be a "weak flattening" implementation
-By this, I mean that if statements are treated like functions instead of being flattened into the current control flow
-I intend to possibly make a strong flattening version, but only once weak is made so I have a point I can return to if I screw up
 Note that defining a local twice (local x; local x) can cause some unexpected behaviour and may produce wrong code
+I expect the second local will be treated like it didn't exist and turned into an assignment, causing the code to continue using the old var
+This could be wrong in extremely specific cases
 
 This entire process of "control flattening" is very difficult to do in lua, considering scopes are very closed
 Most languages bring in new scopes per function, but we get new scopes per any sort of Body entry (Like an If statement)
@@ -1285,7 +1283,7 @@ local function FlattenControlFlow(ast)
 				return v
 			end
 		})
-		local function GetNewVariable(VarName, DontRaise)
+		local function GetNewVariable(VarName)
 			local Count = VariableCounts[VarName]
 			Count[#Count+1] = ScopeChain[#ScopeChain]
 			return VarName .. "__ver" .. #Count
@@ -1297,7 +1295,7 @@ local function FlattenControlFlow(ast)
 				end
 			end
 		end
-		local function DeepScan(t, scanner, blacklist)
+		local function DeepScan(t, blacklist)
 			blacklist = blacklist or {}
 			blacklist[t] = true
 			for k,v in next,t do
@@ -1308,53 +1306,64 @@ local function FlattenControlFlow(ast)
 						if v.Local then
 							if not v.TrueName then
 								v.TrueName = v.Name
-								v.Name = v.Name .. "__ver" .. #VariableCounts[v.Name]
+								v.Name = v.Name .. "__ver" .. #VariableCounts[v.Name] --Don't declare new variable scope till we get forced into a new local
 								if not v.Local.TrueName then
 									local NewName = GetNewVariable(v.TrueName)
 									v.Local.TrueName = v.Local.Name
 									v.Local.Name = NewName
-									Variables[#Variables+1] = v.Name
+									v.Name = NewName --not required since rewriter only uses local name but its good practice
+									Variables[#Variables+1] = NewName
 								end
+							end
+						end --no need to scan a VarExpr
+					elseif v.AstType == "LocalStatement" then
+						for _,Local in next,v.LocalList do
+							if not Local.TrueName then
+								local NewName = GetNewVariable(Local.Name)
+								Local.TrueName = Local.Name
+								Local.Name = NewName
+								Variables[#Variables+1] = NewName
 							end
 						end
-					else
-						if v.AstType == "LocalStatement" then
-							for _,Local in next,v.LocalList do
-								if not Local.TrueName then
-									local NewName = GetNewVariable(Local.Name)
-									Local.TrueName = Local.Name
-									Local.Name = NewName
-									Variables[#Variables+1] = Local.Name
-								end
-							end
-						--ALL THESE ARE TODO
-						elseif v.AstType == "IfStatement" then
-							--for clause in statement
-							--ScopeChain[#ScopeChain+1] = v.Body.Scope
-						elseif v.AstType == "WhileStatement"
-							or v.AstType == "DoStatement"
-							or v.AstType == "RepeatStatement" then
-							ScopeChain[#ScopeChain+1] = v.Body.Scope
-							DeepScan(v, scanner, blacklist)
+						DeepScan(v.InitList, blacklist)
+					elseif v.AstType == "IfStatement" then
+						--for clause in statement
+						for _,Clause in next,v.Clauses do
+							ScopeChain[#ScopeChain+1] = Clause.Body.Scope
+							DeepScan(Clause, blacklist)
 							ScopeChain[#ScopeChain] = nil
-							ClearUsedVariables(v.Body.Scope)
-						elseif v.AstType == "NumericForStatement" then
-							ScopeChain[#ScopeChain+1] = v.Body.Scope
-						elseif v.AstType == "GenericForStatement" then
-							ScopeChain[#ScopeChain+1] = v.Body.Scope
+							ClearUsedVariables(Clause.Body.Scope)
 						end
-						DeepScan(v, scanner, blacklist)
+						DeepScan(v, blacklist)
+					elseif v.AstType == "WhileStatement"
+						or v.AstType == "DoStatement"
+						or v.AstType == "RepeatStatement"
+						or v.AstType == "NumericForStatement"
+						or v.AstType == "GenericForStatement" then
+						ScopeChain[#ScopeChain+1] = v.Body.Scope
+						DeepScan(v, blacklist)
+						ScopeChain[#ScopeChain] = nil
+						ClearUsedVariables(v.Body.Scope)
+					else
+						DeepScan(v, blacklist)
 					end
 				end
 			end
 		end
 		DeepScan(Body)
+		local SeenVariables = {}
+		local VariableObjects = {}
 		for i,Variable in next,Variables do
-			Variables[i] = {CanRename=true, Scope=Body.Scope, Name=Variable}
+			if not SeenVariables[Variable] then
+				VariableObjects[#VariableObjects+1] = {CanRename=true, Scope=Body.Scope, Name=Variable}
+				SeenVariables[Variable] = true
+			else
+				print("WARNING: Double-definition of local " .. Variable .. " found during flattening - no guarantee of expected behaviour")
+			end
 		end
 		NewAST[1] = {
 			AstType = "LocalStatement",
-			LocalList = Variables,
+			LocalList = VariableObjects,
 			InitList = {{AstType="NumberExpr", Value={Data="1"}}},
 		}
 
