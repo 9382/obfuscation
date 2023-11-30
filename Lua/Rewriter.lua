@@ -1272,22 +1272,58 @@ This forces us to do some quite ugly and unreliable self-management
 local function FlattenControlFlow(ast)
 	local function PerformFlattening(Body)
 		local NewAST = {}
-		--Step 1: Variable collection
+		--Step 1: Variable collection and scope calculations
 		local Variables = {}
 		local InstructionPointer = "__ins" .. math.random(1e4,1e5-1) .. "__"
 		local InstructionExpression = {AstType="VarExpr", Name=InstructionPointer, Local={CanRename=true, Scope=Body.Scope, Name=InstructionPointer}}
 		Variables[1] = InstructionPointer
-		for _,Statement in ipairs(Body) do
-			if Statement.AstType == "LocalStatement" then
-				for _,Name in next,Statement.LocalList do
-					Variables[#Variables+1] = Name.Name
-				end
-			elseif Statement.AstType == "Function" then
-				if Statement.IsLocal then
-					Variables[#Variables+1] = Statement.Name.Name
+		local ScopeChain = {Body.Scope}
+		local function DeepScan(t, scanner, blacklist)
+			blacklist = blacklist or {}
+			blacklist[t] = true
+			for k,v in next,t do
+				if type(v) == "table" and k ~= "Scope" and not blacklist[v] then
+					if v.AstType == "Function" then
+						v.Body.Body = PerformFlattening(v.Body.Body)
+					elseif v.AstType == "VarExpr" then
+						if v.Local then
+							v.Name = v.Name .. "__scope" .. #ScopeChain
+							if not v.Local.Modified then
+								v.Local.Name = v.Local.Name .. "__scope" .. #ScopeChain
+								v.Local.Modified = true
+								Variables[#Variables+1] = v.Name
+							end
+						end
+					else
+						if v.AstType == "LocalStatement" then
+							for _,Local in next,v.LocalList do
+								if not Local.Modified then
+									Local.Name = Local.Name .. "__scope" .. #ScopeChain
+									Local.Modified = true
+									Variables[#Variables+1] = Local.Name
+								end
+							end
+						--ALL THESE ARE TODO
+						elseif v.AstType == "IfStatement" then
+							--for clause in statement
+							--ScopeChain[#ScopeChain+1] = v.Body.Scope
+						elseif v.AstType == "WhileStatement" then
+							ScopeChain[#ScopeChain+1] = v.Body.Scope
+						elseif v.AstType == "RepeatStatement" then
+							ScopeChain[#ScopeChain+1] = v.Body.Scope
+						elseif v.AstType == "DoStatement" then
+							ScopeChain[#ScopeChain+1] = v.Body.Scope
+						elseif v.AstType == "NumericForStatement" then
+							ScopeChain[#ScopeChain+1] = v.Body.Scope
+						elseif v.AstType == "GenericForStatement" then
+							ScopeChain[#ScopeChain+1] = v.Body.Scope
+						end
+						DeepScan(v, scanner, blacklist)
+					end
 				end
 			end
 		end
+		DeepScan(Body)
 		for i,Variable in next,Variables do
 			Variables[i] = {CanRename=true, Scope=Body.Scope, Name=Variable}
 		end
@@ -1336,8 +1372,6 @@ local function FlattenControlFlow(ast)
 			elseif Statement.AstType == "Function" and Statement.IsLocal then
 				Statement.IsLocal = false
 				local FuncName = Statement.Name.Name
-				Statement.Body.Body = PerformFlattening(Statement.Body.Body)
-				Statement.Modified = true
 				CollectedStatements[index] = StandardProcedure({
 					AstType = "AssignmentStatement",
 					Lhs = {{AstType="VarExpr", Name=FuncName, Local={CanRename=true, Scope=Body.Scope, name=FuncName}}},
@@ -1394,35 +1428,8 @@ local function FlattenControlFlow(ast)
 			else
 				CollectedStatements[index] = StandardProcedure(Statement, index)
 			end
-
-			--Catch uncaught functions (this code will cause any sane person to cry for days on end)
-			for k1,v1 in next,Statement do
-				if type(v1) == "table" then
-					if v1.AstType == "Function" and not v1.Modified then
-						v1.Body.Body = PerformFlattening(v1.Body.Body)
-						v1.Modified = true
-					else
-						for k2,v2 in next,v1 do
-							if type(v2) == "table" then
-								if v2.AstType == "Function" and not v2.Modified then
-									v2.Body.Body = PerformFlattening(v2.Body.Body)
-									v2.Modified = true
-								else
-									for k3,v3 in next,v2 do
-										if type(v3) == "table" then
-											if v3.AstType == "Function" and not v3.Modified then
-												v3.Body.Body = PerformFlattening(v3.Body.Body)
-												v3.Modified = true
-											end
-										end
-									end
-								end
-							end
-						end
-					end
-				end
-			end
 		end
+		--]===]
 
 		--Step 3: Shuffle the statement order for obscurity
 		--TODO: Actually change instruction numbers too for extra obscurity
@@ -1430,10 +1437,10 @@ local function FlattenControlFlow(ast)
 		for a,b in next,CollectedStatements do
 			ToShuffle[a] = b
 		end
-		CollectedStatements={}
-		while #ToShuffle>0 do
-			CollectedStatements[#CollectedStatements+1] = table.remove(ToShuffle, math.random(1, #ToShuffle))
-		end
+		-- CollectedStatements={}
+		-- while #ToShuffle>0 do
+		-- 	CollectedStatements[#CollectedStatements+1] = table.remove(ToShuffle, math.random(1, #ToShuffle))
+		-- end
 
 		--Wrap it up
 		NewAST[2] = {
