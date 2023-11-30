@@ -1268,7 +1268,7 @@ Most languages bring in new scopes per function, but we get new scopes per any s
 This forces us to do some quite ugly and unreliable self-management
 --]]
 local function FlattenControlFlow(ast)
-	local function PerformFlattening(Body)
+	local function PerformFlattening(Body, ExtraVariables)
 		local NewAST = {}
 		--Step 1: Variable collection and scope calculations
 		local Variables = {}
@@ -1301,7 +1301,7 @@ local function FlattenControlFlow(ast)
 			for k,v in next,t do
 				if type(v) == "table" and k ~= "Scope" and not blacklist[v] then
 					if v.AstType == "Function" then
-						v.Body.Body = PerformFlattening(v.Body.Body)
+						v.Body.Body = PerformFlattening(v.Body.Body, v.Arguments)
 					elseif v.AstType == "VarExpr" then
 						if v.Local then
 							if not v.TrueName then
@@ -1344,11 +1344,21 @@ local function FlattenControlFlow(ast)
 						DeepScan(v, blacklist)
 						ScopeChain[#ScopeChain] = nil
 						ClearUsedVariables(v.Body.Scope)
+					elseif v.CanRename then --The raw form of a Local which we've somehow come across (probably a function arg)
+						if not v.TrueName then
+							local NewName = GetNewVariable(v.Name)
+							v.TrueName = v.Name
+							v.Name = NewName
+							--Do not mark it as a variable - it's already local, and we don't want to overwrite it, just help later code understand it
+						end
 					else
 						DeepScan(v, blacklist)
 					end
 				end
 			end
+		end
+		if ExtraVariables then
+			DeepScan(ExtraVariables)
 		end
 		DeepScan(Body)
 		local SeenVariables = {}
