@@ -1384,10 +1384,46 @@ local function FlattenControlFlow(ast)
 				Condition = CreateInstructionCheck(index)
 			}
 		end
+		local function ExtendInstructions(BaseInstructions, NewInstructions)
+			--This is my punishment for not being modular - round 2!
+			local offset = #BaseInstructions
+			for i = 1,#NewInstructions do
+				BaseInstructions[i+offset] = NewInstructions[i]
+			end
+			local function DeepScan2(t, blacklist)
+				blacklist = blacklist or {}
+				blacklist[t] = true
+				for k,v in next,t do
+					if type(v) == "table" and k ~= "Scope" and not blacklist[v] then
+						if v.AstType == "AssignmentStatement" and v.Lhs[1] == InstructionExpression then
+							v.Rhs[1].Value.Data = tostring(tonumber(v.Rhs[1].Value.Data)+offset)
+						elseif v.AstType == "BinopExpr" and v.Lhs == InstructionExpression then
+							v.Rhs.Value.Data = tostring(tonumber(v.Rhs.Value.Data)+offset)
+						else
+							DeepScan2(v, blacklist)
+						end
+					end
+				end
+			end
+			DeepScan2(NewInstructions)
+		end
 		local function CollectInstructionsFromBody(Body)
-			local CollectedStatements = {}
+			local CollectedInstructions = {}
+			local function ForceGoToInstruction(t, ins, blacklist) --DeepScan3 :):):):)
+				blacklist = blacklist or {}
+				blacklist[t] = true
+				for k,v in next,t do
+					if type(v) == "table" and k ~= "Scope" and not blacklist[v] then
+						if v.AstType == "AssignmentStatement" and v.Lhs[1] == InstructionExpression then
+							v.Rhs[1].Value.Data = tostring(ins)
+						else
+							ForceGoToInstruction(v, ins, blacklist)
+						end
+					end
+				end
+			end
 			for _,Statement in ipairs(Body) do
-				local index = #CollectedStatements+1
+				local index = #CollectedInstructions+1
 
 				--Special ones
 				if Statement.AstType == "LocalStatement" then
@@ -1402,12 +1438,12 @@ local function FlattenControlFlow(ast)
 					end
 					Statement.InitList = nil
 					Statement.LocalList = nil
-					CollectedStatements[index] = StandardProcedure(Statement, index)
+					CollectedInstructions[index] = StandardProcedure(Statement, index)
 
 				elseif Statement.AstType == "Function" and Statement.IsLocal then
 					Statement.IsLocal = false
 					local FuncName = Statement.Name.Name
-					CollectedStatements[index] = StandardProcedure({
+					CollectedInstructions[index] = StandardProcedure({
 						AstType = "AssignmentStatement",
 						Lhs = {{AstType="VarExpr", Name=FuncName, Local={CanRename=true, Scope=Body.Scope, name=FuncName}}},
 						Rhs = {Statement},
@@ -1416,27 +1452,43 @@ local function FlattenControlFlow(ast)
 				elseif Statement.AstType == "ReturnStatement" then
 					local out = StandardProcedure(Statement, index)
 					out.Body.Body[2] = nil
-					CollectedStatements[index] = out
+					CollectedInstructions[index] = out
 
-				elseif Statement.AstType == "IfStatement" then --THIS IS WEAK
-					--If this was strong, each condition would set __ins__ to a reserved ID section that had the if's code
-					for i,Clause in ipairs(Statement.Clauses) do
-						Clause.Body.Body = PerformFlattening(Clause.Body.Body)
-						-- Clause.Body.Body[#Clause.Body.Body+1] = {AstType="AssignmentStatement", Lhs={InstructionExpression}, Rhs={{AstType="NumberExpr", Value={Data=tostring(index+1)}}}}
+				elseif Statement.AstType == "IfStatement" then
+					local Clauses = Statement.Clauses
+					local ClauseToInstruction = {}
+					CollectedInstructions[index] = {}
+					local LastInstructions = {}
+					local HasACatchAll = not Statement.Clauses[#Statement.Clauses].Condition
+					if not HasACatchAll then
+						Statement.Clauses[#Statement.Clauses+1] = {Body={AstType="Stalist", Scope=Body.Scope, Body={}}} --this just works with no adjustment, /shrug
 					end
+
+					for i,Clause in next,Statement.Clauses do
+						local SubInstructions = CollectInstructionsFromBody(Clause.Body.Body)
+						ClauseToInstruction[i] = #CollectedInstructions+1
+						Clause.Body.Body = {{AstType="AssignmentStatement", Lhs={InstructionExpression}, Rhs={{AstType="NumberExpr", Value={Data=tostring(#CollectedInstructions+1)}}}}}
+						LastInstructions[#LastInstructions+1] = SubInstructions[#SubInstructions]
+						ExtendInstructions(CollectedInstructions, SubInstructions)
+					end
+					local ExitInstruction = #CollectedInstructions+1
+					for i = 1, #LastInstructions do
+						ForceGoToInstruction(LastInstructions[i], ExitInstruction)
+					end
+
 					local out = StandardProcedure(Statement, index)
-					-- out.Body.Body[2] = nil
-					CollectedStatements[index] = out
+					out.Body.Body[2] = nil
+					CollectedInstructions[index] = out
 
 				elseif Statement.AstType == "WhileStatement" then --THIS IS WEAK
 					--If this was strong, the condition would be implemented like a statement and flow would split from there
 					Statement.Body.Body = PerformFlattening(Statement.Body.Body)
-					CollectedStatements[index] = StandardProcedure(Statement, index)
+					CollectedInstructions[index] = StandardProcedure(Statement, index)
 
 				elseif Statement.AstType == "RepeatStatement" then --THIS IS WEAK
 					--If this was strong, the condition would be implemented like a statement and flow would split from there
 					Statement.Body.Body = PerformFlattening(Statement.Body.Body)
-					CollectedStatements[index] = StandardProcedure(Statement, index)
+					CollectedInstructions[index] = StandardProcedure(Statement, index)
 
 				elseif Statement.AstType == "DoStatement" then --THIS IS WEAK
 					--If this was strong, it would just ignore the do (note that we would need advanced handling of locals to flatten safely! especially considering do is used for local reasons)
@@ -1445,7 +1497,7 @@ local function FlattenControlFlow(ast)
 					local outBody = out.Body.Body
 					outBody[3] = outBody[2]
 					outBody[1], outBody[2] = Statement[1], Statement[2]
-					CollectedStatements[index] = out
+					CollectedInstructions[index] = out
 
 				elseif Statement.AstType == "CallStatement" then
 					local Base = Statement.Expression.Base
@@ -1453,31 +1505,31 @@ local function FlattenControlFlow(ast)
 						Base.Body.Body = PerformFlattening(Base.Body.Body)
 						Base.Modified = true
 					end
-					CollectedStatements[index] = StandardProcedure(Statement, index)
+					CollectedInstructions[index] = StandardProcedure(Statement, index)
 
 				elseif Statement.AstType == "NumericForStatement" or Statement.AstType == "GenericForStatement" then --THIS IS WEAK
 					Statement.Body.Body = PerformFlattening(Statement.Body.Body)
-					CollectedStatements[index] = StandardProcedure(Statement, index)
+					CollectedInstructions[index] = StandardProcedure(Statement, index)
 
 				--Else, normal stuff
 				else
-					CollectedStatements[index] = StandardProcedure(Statement, index)
+					CollectedInstructions[index] = StandardProcedure(Statement, index)
 				end
 			end
-			return CollectedStatements
+			return CollectedInstructions
 		end
-		CollectedStatements = CollectInstructionsFromBody(Body)
+		CollectedInstructions = CollectInstructionsFromBody(Body)
 		--]===]
 
 		--Step 3: Shuffle the statement order for obscurity
 		--TODO: Actually change instruction numbers too for extra obscurity
 		local ToShuffle = {}
-		for a,b in next,CollectedStatements do
+		for a,b in next,CollectedInstructions do
 			ToShuffle[a] = b
 		end
-		-- CollectedStatements={}
+		-- CollectedInstructions={}
 		-- while #ToShuffle>0 do
-		-- 	CollectedStatements[#CollectedStatements+1] = table.remove(ToShuffle, math.random(1, #ToShuffle))
+		-- 	CollectedInstructions[#CollectedInstructions+1] = table.remove(ToShuffle, math.random(1, #ToShuffle))
 		-- end
 
 		--Wrap it up
@@ -1494,7 +1546,7 @@ local function FlattenControlFlow(ast)
 				Scope = Body.Scope,
 				Body = {{
 					AstType = "IfStatement",
-					Clauses = CollectedStatements
+					Clauses = CollectedInstructions
 				}}
 			}
 		}
