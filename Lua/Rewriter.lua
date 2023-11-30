@@ -1502,35 +1502,20 @@ local function FlattenControlFlow(ast)
 					out.Body.Body[2] = nil
 					CollectedInstructions[index] = out
 
-				elseif Statement.AstType == "WhileStatement" then --THIS IS WEAK
-					--If this was strong, the condition would be implemented like a statement and flow would split from there
-					Statement.Body.Body = PerformFlattening(Statement.Body.Body)
+				elseif Statement.AstType == "WhileStatement" then --THIS IS TODO
+					local NewStatement = {
+						AstType = "IfStatement",
+						Clauses = {},
+					}
 					CollectedInstructions[index] = StandardProcedure(Statement, index)
 
-				elseif Statement.AstType == "RepeatStatement" then --THIS IS WEAK
-					--If this was strong, the condition would be implemented like a statement and flow would split from there
-					Statement.Body.Body = PerformFlattening(Statement.Body.Body)
+				elseif Statement.AstType == "RepeatStatement" then --THIS IS TODO
 					CollectedInstructions[index] = StandardProcedure(Statement, index)
 
-				elseif Statement.AstType == "DoStatement" then --THIS IS WEAK
-					--If this was strong, it would just ignore the do (note that we would need advanced handling of locals to flatten safely! especially considering do is used for local reasons)
-					local out = StandardProcedure(false, index)
-					Statement = PerformFlattening(Statement.Body.Body)
-					local outBody = out.Body.Body
-					outBody[3] = outBody[2]
-					outBody[1], outBody[2] = Statement[1], Statement[2]
-					CollectedInstructions[index] = out
+				elseif Statement.AstType == "DoStatement" then
+					ExtendInstructions(CollectedInstructions, CollectInstructionsFromBody(Statement.Body.Body)) --cool one-liner (all variable stuff was handled step 1)
 
-				elseif Statement.AstType == "CallStatement" then
-					local Base = Statement.Expression.Base
-					if Base.AstType == "Function" then
-						Base.Body.Body = PerformFlattening(Base.Body.Body)
-						Base.Modified = true
-					end
-					CollectedInstructions[index] = StandardProcedure(Statement, index)
-
-				elseif Statement.AstType == "NumericForStatement" or Statement.AstType == "GenericForStatement" then --THIS IS WEAK
-					Statement.Body.Body = PerformFlattening(Statement.Body.Body)
+				elseif Statement.AstType == "NumericForStatement" or Statement.AstType == "GenericForStatement" then --THIS IS TODO
 					CollectedInstructions[index] = StandardProcedure(Statement, index)
 
 				--Else, normal stuff
