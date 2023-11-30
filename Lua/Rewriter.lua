@@ -1331,15 +1331,13 @@ local function FlattenControlFlow(ast)
 						elseif v.AstType == "IfStatement" then
 							--for clause in statement
 							--ScopeChain[#ScopeChain+1] = v.Body.Scope
-						elseif v.AstType == "WhileStatement" then
+						elseif v.AstType == "WhileStatement"
+							or v.AstType == "DoStatement"
+							or v.AstType == "RepeatStatement" then
 							ScopeChain[#ScopeChain+1] = v.Body.Scope
 							DeepScan(v, scanner, blacklist)
 							ScopeChain[#ScopeChain] = nil
 							ClearUsedVariables(v.Body.Scope)
-						elseif v.AstType == "RepeatStatement" then
-							ScopeChain[#ScopeChain+1] = v.Body.Scope
-						elseif v.AstType == "DoStatement" then
-							ScopeChain[#ScopeChain+1] = v.Body.Scope
 						elseif v.AstType == "NumericForStatement" then
 							ScopeChain[#ScopeChain+1] = v.Body.Scope
 						elseif v.AstType == "GenericForStatement" then
@@ -1361,7 +1359,6 @@ local function FlattenControlFlow(ast)
 		}
 
 		--Step 2: Compile the statements
-		local CollectedStatements = {}
 		local function CreateInstructionCheck(index)
 			return {
 				AstType="BinopExpr", Op="==",
@@ -1378,84 +1375,89 @@ local function FlattenControlFlow(ast)
 				Condition = CreateInstructionCheck(index)
 			}
 		end
-		for _,Statement in ipairs(Body) do
-			local index = #CollectedStatements+1
+		local function CollectInstructionsFromBody(Body)
+			local CollectedStatements = {}
+			for _,Statement in ipairs(Body) do
+				local index = #CollectedStatements+1
 
-			--Special ones
-			if Statement.AstType == "LocalStatement" then
-				Statement.AstType = "AssignmentStatement"
-				Statement.Lhs = Statement.LocalList
-				for i,Lhs in ipairs(Statement.Lhs) do
-					Statement.Lhs[i] = {AstType="VarExpr", Name=Lhs.Name, Local={CanRename=true, Scope=Body.Scope, Name=Lhs.Name}}
+				--Special ones
+				if Statement.AstType == "LocalStatement" then
+					Statement.AstType = "AssignmentStatement"
+					Statement.Lhs = Statement.LocalList
+					for i,Lhs in ipairs(Statement.Lhs) do
+						Statement.Lhs[i] = {AstType="VarExpr", Name=Lhs.Name, Local={CanRename=true, Scope=Body.Scope, Name=Lhs.Name}}
+					end
+					Statement.Rhs = Statement.InitList
+					if #Statement.Rhs == 0 then
+						Statement.Rhs = {{AstType="NilExpr"}}
+					end
+					Statement.InitList = nil
+					Statement.LocalList = nil
+					CollectedStatements[index] = StandardProcedure(Statement, index)
+
+				elseif Statement.AstType == "Function" and Statement.IsLocal then
+					Statement.IsLocal = false
+					local FuncName = Statement.Name.Name
+					CollectedStatements[index] = StandardProcedure({
+						AstType = "AssignmentStatement",
+						Lhs = {{AstType="VarExpr", Name=FuncName, Local={CanRename=true, Scope=Body.Scope, name=FuncName}}},
+						Rhs = {Statement},
+					}, index)
+
+				elseif Statement.AstType == "ReturnStatement" then
+					local out = StandardProcedure(Statement, index)
+					out.Body.Body[2] = nil
+					CollectedStatements[index] = out
+
+				elseif Statement.AstType == "IfStatement" then --THIS IS WEAK
+					--If this was strong, each condition would set __ins__ to a reserved ID section that had the if's code
+					for i,Clause in ipairs(Statement.Clauses) do
+						Clause.Body.Body = PerformFlattening(Clause.Body.Body)
+						-- Clause.Body.Body[#Clause.Body.Body+1] = {AstType="AssignmentStatement", Lhs={InstructionExpression}, Rhs={{AstType="NumberExpr", Value={Data=tostring(index+1)}}}}
+					end
+					local out = StandardProcedure(Statement, index)
+					-- out.Body.Body[2] = nil
+					CollectedStatements[index] = out
+
+				elseif Statement.AstType == "WhileStatement" then --THIS IS WEAK
+					--If this was strong, the condition would be implemented like a statement and flow would split from there
+					Statement.Body.Body = PerformFlattening(Statement.Body.Body)
+					CollectedStatements[index] = StandardProcedure(Statement, index)
+
+				elseif Statement.AstType == "RepeatStatement" then --THIS IS WEAK
+					--If this was strong, the condition would be implemented like a statement and flow would split from there
+					Statement.Body.Body = PerformFlattening(Statement.Body.Body)
+					CollectedStatements[index] = StandardProcedure(Statement, index)
+
+				elseif Statement.AstType == "DoStatement" then --THIS IS WEAK
+					--If this was strong, it would just ignore the do (note that we would need advanced handling of locals to flatten safely! especially considering do is used for local reasons)
+					local out = StandardProcedure(false, index)
+					Statement = PerformFlattening(Statement.Body.Body)
+					local outBody = out.Body.Body
+					outBody[3] = outBody[2]
+					outBody[1], outBody[2] = Statement[1], Statement[2]
+					CollectedStatements[index] = out
+
+				elseif Statement.AstType == "CallStatement" then
+					local Base = Statement.Expression.Base
+					if Base.AstType == "Function" then
+						Base.Body.Body = PerformFlattening(Base.Body.Body)
+						Base.Modified = true
+					end
+					CollectedStatements[index] = StandardProcedure(Statement, index)
+
+				elseif Statement.AstType == "NumericForStatement" or Statement.AstType == "GenericForStatement" then --THIS IS WEAK
+					Statement.Body.Body = PerformFlattening(Statement.Body.Body)
+					CollectedStatements[index] = StandardProcedure(Statement, index)
+
+				--Else, normal stuff
+				else
+					CollectedStatements[index] = StandardProcedure(Statement, index)
 				end
-				Statement.Rhs = Statement.InitList
-				if #Statement.Rhs == 0 then
-					Statement.Rhs = {{AstType="NilExpr"}}
-				end
-				Statement.InitList = nil
-				Statement.LocalList = nil
-				CollectedStatements[index] = StandardProcedure(Statement, index)
-
-			elseif Statement.AstType == "Function" and Statement.IsLocal then
-				Statement.IsLocal = false
-				local FuncName = Statement.Name.Name
-				CollectedStatements[index] = StandardProcedure({
-					AstType = "AssignmentStatement",
-					Lhs = {{AstType="VarExpr", Name=FuncName, Local={CanRename=true, Scope=Body.Scope, name=FuncName}}},
-					Rhs = {Statement},
-				}, index)
-
-			elseif Statement.AstType == "ReturnStatement" then
-				local out = StandardProcedure(Statement, index)
-				out.Body.Body[2] = nil
-				CollectedStatements[index] = out
-
-			elseif Statement.AstType == "IfStatement" then --THIS IS WEAK
-				--If this was strong, each condition would set __ins__ to a reserved ID section that had the if's code
-				for i,Clause in ipairs(Statement.Clauses) do
-					Clause.Body.Body = PerformFlattening(Clause.Body.Body)
-					-- Clause.Body.Body[#Clause.Body.Body+1] = {AstType="AssignmentStatement", Lhs={InstructionExpression}, Rhs={{AstType="NumberExpr", Value={Data=tostring(index+1)}}}}
-				end
-				local out = StandardProcedure(Statement, index)
-				-- out.Body.Body[2] = nil
-				CollectedStatements[index] = out
-
-			elseif Statement.AstType == "WhileStatement" then --THIS IS WEAK
-				--If this was strong, the condition would be implemented like a statement and flow would split from there
-				Statement.Body.Body = PerformFlattening(Statement.Body.Body)
-				CollectedStatements[index] = StandardProcedure(Statement, index)
-
-			elseif Statement.AstType == "RepeatStatement" then --THIS IS WEAK
-				--If this was strong, the condition would be implemented like a statement and flow would split from there
-				Statement.Body.Body = PerformFlattening(Statement.Body.Body)
-				CollectedStatements[index] = StandardProcedure(Statement, index)
-
-			elseif Statement.AstType == "DoStatement" then --THIS IS WEAK
-				--If this was strong, it would just ignore the do (note that we would need advanced handling of locals to flatten safely! especially considering do is used for local reasons)
-				local out = StandardProcedure(false, index)
-				Statement = PerformFlattening(Statement.Body.Body)
-				local outBody = out.Body.Body
-				outBody[3] = outBody[2]
-				outBody[1], outBody[2] = Statement[1], Statement[2]
-				CollectedStatements[index] = out
-
-			elseif Statement.AstType == "CallStatement" then
-				local Base = Statement.Expression.Base
-				if Base.AstType == "Function" then
-					Base.Body.Body = PerformFlattening(Base.Body.Body)
-					Base.Modified = true
-				end
-				CollectedStatements[index] = StandardProcedure(Statement, index)
-
-			elseif Statement.AstType == "NumericForStatement" or Statement.AstType == "GenericForStatement" then --THIS IS WEAK
-				Statement.Body.Body = PerformFlattening(Statement.Body.Body)
-				CollectedStatements[index] = StandardProcedure(Statement, index)
-
-			--Else, normal stuff
-			else
-				CollectedStatements[index] = StandardProcedure(Statement, index)
 			end
+			return CollectedStatements
 		end
+		CollectedStatements = CollectInstructionsFromBody(Body)
 		--]===]
 
 		--Step 3: Shuffle the statement order for obscurity
