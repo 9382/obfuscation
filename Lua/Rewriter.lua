@@ -1278,6 +1278,25 @@ local function FlattenControlFlow(ast)
 		local InstructionExpression = {AstType="VarExpr", Name=InstructionPointer, Local={CanRename=true, Scope=Body.Scope, Name=InstructionPointer}}
 		Variables[1] = InstructionPointer
 		local ScopeChain = {Body.Scope}
+		local VariableCounts = setmetatable({}, {
+			__index=function(t,k)
+				local v = {}
+				rawset(t,k,v)
+				return v
+			end
+		})
+		local function GetNewVariable(VarName, DontRaise)
+			local Count = VariableCounts[VarName]
+			Count[#Count+1] = ScopeChain[#ScopeChain]
+			return VarName .. "__ver" .. #Count
+		end
+		local function ClearUsedVariables(Scope)
+			for var,data in next,VariableCounts do
+				if data[#data] == Scope then
+					data[#data] = nil
+				end
+			end
+		end
 		local function DeepScan(t, scanner, blacklist)
 			blacklist = blacklist or {}
 			blacklist[t] = true
@@ -1287,19 +1306,24 @@ local function FlattenControlFlow(ast)
 						v.Body.Body = PerformFlattening(v.Body.Body)
 					elseif v.AstType == "VarExpr" then
 						if v.Local then
-							v.Name = v.Name .. "__scope" .. #ScopeChain
-							if not v.Local.Modified then
-								v.Local.Name = v.Local.Name .. "__scope" .. #ScopeChain
-								v.Local.Modified = true
-								Variables[#Variables+1] = v.Name
+							if not v.TrueName then
+								v.TrueName = v.Name
+								v.Name = v.Name .. "__ver" .. #VariableCounts[v.Name]
+								if not v.Local.TrueName then
+									local NewName = GetNewVariable(v.TrueName)
+									v.Local.TrueName = v.Local.Name
+									v.Local.Name = NewName
+									Variables[#Variables+1] = v.Name
+								end
 							end
 						end
 					else
 						if v.AstType == "LocalStatement" then
 							for _,Local in next,v.LocalList do
-								if not Local.Modified then
-									Local.Name = Local.Name .. "__scope" .. #ScopeChain
-									Local.Modified = true
+								if not Local.TrueName then
+									local NewName = GetNewVariable(Local.Name)
+									Local.TrueName = Local.Name
+									Local.Name = NewName
 									Variables[#Variables+1] = Local.Name
 								end
 							end
@@ -1309,6 +1333,9 @@ local function FlattenControlFlow(ast)
 							--ScopeChain[#ScopeChain+1] = v.Body.Scope
 						elseif v.AstType == "WhileStatement" then
 							ScopeChain[#ScopeChain+1] = v.Body.Scope
+							DeepScan(v, scanner, blacklist)
+							ScopeChain[#ScopeChain] = nil
+							ClearUsedVariables(v.Body.Scope)
 						elseif v.AstType == "RepeatStatement" then
 							ScopeChain[#ScopeChain+1] = v.Body.Scope
 						elseif v.AstType == "DoStatement" then
