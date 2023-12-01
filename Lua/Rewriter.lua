@@ -1269,7 +1269,7 @@ Most languages bring in new scopes per function, but we get new scopes per any s
 This forces us to do some quite ugly and unreliable self-management
 --]]
 local function FlattenControlFlow(ast)
-	local function PerformFlattening(Body, ExtraVariables, ScopesBefore)
+	local function PerformFlattening(Body, FunctionVariables, ScopesBefore)
 		ScopesBefore = ScopesBefore or 0
 		local NewAST = {}
 		--Step 1: Variable collection and scope calculations
@@ -1297,12 +1297,23 @@ local function FlattenControlFlow(ast)
 				end
 			end
 		end
-		local function DeepScan(t, blacklist)
+		local function DeepScan(t, IsPreDefined, blacklist)
 			blacklist = blacklist or {}
 			blacklist[t] = true
 			for k,v in next,t do
 				if type(v) == "table" and k ~= "Scope" and not blacklist[v] then
 					if v.AstType == "Function" then
+						if v.IsLocal then
+							--This is just to fix local functions that get defined but never used
+							--What if you just didn't do that in the first place? :)
+							local Name = v.Name
+							if not Name.TrueName then
+								local NewName = GetNewVariable(Name.Name)
+								Name.TrueName = Name.Name
+								Name.Name = NewName
+								Variables[#Variables+1] = NewName
+							end
+						end
 						v.Body.Body = PerformFlattening(v.Body.Body, v.Arguments, ScopesBefore+1)
 					elseif v.AstType == "VarExpr" then
 						if v.Local then
@@ -1327,7 +1338,7 @@ local function FlattenControlFlow(ast)
 								Variables[#Variables+1] = NewName
 							end
 						end
-						DeepScan(v.InitList, blacklist)
+						DeepScan(v.InitList, IsPreDefined, blacklist)
 					elseif v.AstType == "IfStatement" then
 						--for clause in statement
 						for _,Clause in next,v.Clauses do
@@ -1336,14 +1347,14 @@ local function FlattenControlFlow(ast)
 							ScopeChain[#ScopeChain] = nil
 							ClearUsedVariables(Clause.Body.Scope)
 						end
-						DeepScan(v, blacklist)
+						DeepScan(v, IsPreDefined, blacklist)
 					elseif v.AstType == "WhileStatement"
 						or v.AstType == "DoStatement"
 						or v.AstType == "RepeatStatement"
 						or v.AstType == "NumericForStatement"
 						or v.AstType == "GenericForStatement" then
 						ScopeChain[#ScopeChain+1] = v.Body.Scope
-						DeepScan(v, blacklist)
+						DeepScan(v, IsPreDefined, blacklist)
 						ScopeChain[#ScopeChain] = nil
 						ClearUsedVariables(v.Body.Scope)
 					elseif v.CanRename then --The raw form of a Local which we've somehow come across (probably a function arg)
@@ -1351,16 +1362,18 @@ local function FlattenControlFlow(ast)
 							local NewName = GetNewVariable(v.Name)
 							v.TrueName = v.Name
 							v.Name = NewName
-							--Do not mark it as a variable - it's already local, and we don't want to overwrite it, just help later code understand it
+							if not IsPreDefined then
+								Variables[#Variables+1] = NewName
+							end
 						end
 					else
-						DeepScan(v, blacklist)
+						DeepScan(v, IsPreDefined, blacklist)
 					end
 				end
 			end
 		end
-		if ExtraVariables then
-			DeepScan(ExtraVariables)
+		if FunctionVariables then
+			DeepScan(FunctionVariables, true)
 		end
 		DeepScan(Body)
 		local SeenVariables = {}
