@@ -1269,7 +1269,8 @@ Most languages bring in new scopes per function, but we get new scopes per any s
 This forces us to do some quite ugly and unreliable self-management
 --]]
 local function FlattenControlFlow(ast)
-	local function PerformFlattening(Body, ExtraVariables)
+	local function PerformFlattening(Body, ExtraVariables, ScopesBefore)
+		ScopesBefore = ScopesBefore or 0
 		local NewAST = {}
 		--Step 1: Variable collection and scope calculations
 		local Variables = {}
@@ -1287,7 +1288,7 @@ local function FlattenControlFlow(ast)
 		local function GetNewVariable(VarName)
 			local Count = VariableCounts[VarName]
 			Count[#Count+1] = ScopeChain[#ScopeChain]
-			return VarName .. "__ver" .. #Count
+			return VarName .. "__ver_" .. ScopesBefore .. "_" .. #Count
 		end
 		local function ClearUsedVariables(Scope)
 			for var,data in next,VariableCounts do
@@ -1302,19 +1303,19 @@ local function FlattenControlFlow(ast)
 			for k,v in next,t do
 				if type(v) == "table" and k ~= "Scope" and not blacklist[v] then
 					if v.AstType == "Function" then
-						v.Body.Body = PerformFlattening(v.Body.Body, v.Arguments)
+						v.Body.Body = PerformFlattening(v.Body.Body, v.Arguments, ScopesBefore+1)
 					elseif v.AstType == "VarExpr" then
 						if v.Local then
-							if not v.TrueName then
-								v.TrueName = v.Name
-								v.Name = v.Name .. "__ver" .. #VariableCounts[v.Name] --Don't declare new variable scope till we get forced into a new local
+							if not v.TrueName and v.Local then
 								if not v.Local.TrueName then
-									local NewName = GetNewVariable(v.TrueName)
+									local NewName = GetNewVariable(v.Local.Name)
 									v.Local.TrueName = v.Local.Name
 									v.Local.Name = NewName
 									v.Name = NewName --not required since rewriter only uses local name but its good practice
 									Variables[#Variables+1] = NewName
 								end
+								v.TrueName = v.Local.TrueName
+								v.Name = v.Local.Name --Don't declare new variable scope if its just another occurance, that gets indicated by new lcoal
 							end
 						end --no need to scan a VarExpr
 					elseif v.AstType == "LocalStatement" then
