@@ -62,7 +62,6 @@ local function PrintTable(tb, atIndent)
 end
 
 local WhiteChars = lookupify{' ', '\n', '\t', '\r'}
-local EscapeLookup = {['\r'] = '\\r', ['\n'] = '\\n', ['\t'] = '\\t', ['"'] = '\\"', ["'"] = "\\'"}
 local LowerChars = lookupify{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 
 							 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 
 							 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'}
@@ -1259,6 +1258,8 @@ A continue statement must go to the start of the loop
 A break statement must go to the first statement after the loop
 A return statement may not need rewriting?
 
+Consider making a default "+1" operation at the end of the loop instead of each statement pointing to its target?
+
 Note that defining a local twice (local x; local x) can cause some unexpected behaviour and may produce wrong code
 I expect the second local will be treated like it didn't exist and turned into an assignment, causing the code to continue using the old var
 This could be wrong in extremely specific cases
@@ -1385,14 +1386,36 @@ local function FlattenControlFlow(ast)
 				Lhs=InstructionExpression,
 			}
 		end
-		local function StandardProcedure(Statement, index)
+		local function CreateInstructionPointer(nextIndex)
+			return {
+				AstType="AssignmentStatement",
+				Lhs={InstructionExpression},
+				Rhs={{AstType="NumberExpr", Value={Data=tostring(nextIndex)}}}
+			}
+		end
+		local function StandardProcedure(Statement, index, forceNext)
 			return {
 				Body = {AstType="Statlist", Scope=Body.Scope, Body={
 					Statement,
-					{AstType="AssignmentStatement", Lhs={InstructionExpression}, Rhs={{AstType="NumberExpr", Value={Data=tostring(index+1)}}}}
+					CreateInstructionPointer(forceNext or index+1),
 				}},
 				Condition = CreateInstructionCheck(index)
 			}
+		end
+		local function OffsetInstructions(t, offset, blacklist)
+			blacklist = blacklist or {}
+			blacklist[t] = true
+			for k,v in next,t do
+				if type(v) == "table" and k ~= "Scope" and not blacklist[v] then
+					if v.AstType == "AssignmentStatement" and v.Lhs[1] == InstructionExpression and tonumber(v.Rhs[1].Value.Data) then
+						v.Rhs[1].Value.Data = tostring(tonumber(v.Rhs[1].Value.Data)+offset)
+					elseif v.AstType == "BinopExpr" and v.Lhs == InstructionExpression and tonumber(v.Rhs.Value.Data) then
+						v.Rhs.Value.Data = tostring(tonumber(v.Rhs.Value.Data)+offset)
+					else
+						OffsetInstructions(v, offset, blacklist)
+					end
+				end
+			end
 		end
 		local function ExtendInstructions(BaseInstructions, NewInstructions)
 			--This is my punishment for not being modular - round 2!
@@ -1400,37 +1423,22 @@ local function FlattenControlFlow(ast)
 			for i = 1,#NewInstructions do
 				BaseInstructions[i+offset] = NewInstructions[i]
 			end
-			local function DeepScan2(t, blacklist)
-				blacklist = blacklist or {}
-				blacklist[t] = true
-				for k,v in next,t do
-					if type(v) == "table" and k ~= "Scope" and not blacklist[v] then
-						if v.AstType == "AssignmentStatement" and v.Lhs[1] == InstructionExpression then
-							v.Rhs[1].Value.Data = tostring(tonumber(v.Rhs[1].Value.Data)+offset)
-						elseif v.AstType == "BinopExpr" and v.Lhs == InstructionExpression then
-							v.Rhs.Value.Data = tostring(tonumber(v.Rhs.Value.Data)+offset)
-						else
-							DeepScan2(v, blacklist)
-						end
-					end
-				end
-			end
-			DeepScan2(NewInstructions)
+			OffsetInstructions(NewInstructions, offset)
 		end
 		local function CollectInstructionsFromBody(Body)
 			local CollectedInstructions = {}
-			local function ForceGoToInstruction(t, ins, old, blacklist) --DeepScan3 :):):):)
+			local function ForceGoToInstruction(t, old, new, blacklist) --DeepScan3 :):):):)
 				blacklist = blacklist or {}
 				blacklist[t] = true
 				for k,v in next,t do
 					if type(v) == "table" and k ~= "Scope" and not blacklist[v] then
 						if v.AstType == "AssignmentStatement" and v.Lhs[1] == InstructionExpression then
 							local Value = v.Rhs[1].Value
-							if not old or tonumber(Value.Data) == old then
-								Value.Data = tostring(ins)
+							if not old or Value.Data == tostring(old) then
+								Value.Data = tostring(new)
 							end
 						else
-							ForceGoToInstruction(v, ins, old, blacklist)
+							ForceGoToInstruction(v, old, new, blacklist)
 						end
 					end
 				end
@@ -1467,9 +1475,21 @@ local function FlattenControlFlow(ast)
 					out.Body.Body[2] = nil
 					CollectedInstructions[index] = out
 
+				elseif Statement.AstType == "BreakStatement"
+					or Statement.AstType == "ContinueStatement" then
+					--The loop that contains these statements will point them to the correct index itself
+					local out = StandardProcedure(Statement, index, Statement.AstType)
+					local outBody = out.Body.Body
+					outBody[1] = outBody[2]
+					outBody[2] = nil
+					CollectedInstructions[index] = out
+
 				elseif Statement.AstType == "IfStatement" then
+					--CONSIDER: Full flattening (splitting each elseif into a new if else instruction) - this'll be very complex but very flat
+					--CONSIDER: Improving the fake-else statement to skip over all instructions by directly pointing to the final instruction instead of allocating a dummy slot
+					--(This could also be done in post-processing but doing it here is more efficient)
 					local Clauses = Statement.Clauses
-					CollectedInstructions[index] = {}
+					CollectedInstructions[index] = {} --Reserve a slot
 					local AllInstructions = {}
 					local HasACatchAll = not Statement.Clauses[#Statement.Clauses].Condition
 					if not HasACatchAll then
@@ -1478,7 +1498,7 @@ local function FlattenControlFlow(ast)
 
 					for i,Clause in next,Statement.Clauses do
 						local SubInstructions = CollectInstructionsFromBody(Clause.Body.Body)
-						Clause.Body.Body = {{AstType="AssignmentStatement", Lhs={InstructionExpression}, Rhs={{AstType="NumberExpr", Value={Data=tostring(#CollectedInstructions+1)}}}}}
+						Clause.Body.Body = {CreateInstructionPointer(#CollectedInstructions+1)}
 
 						if #SubInstructions == 0 then
 							local FakeInstruction = StandardProcedure({}, 1)
@@ -1495,19 +1515,31 @@ local function FlattenControlFlow(ast)
 					end
 					local ExitInstruction = #CollectedInstructions+1
 					for i = 1, #AllInstructions do --Ensure all final instructions from each subset exit at the end of the main if instruction
-						ForceGoToInstruction(AllInstructions[i][1], ExitInstruction, AllInstructions[i][2])
+						ForceGoToInstruction(AllInstructions[i][1], AllInstructions[i][2], ExitInstruction)
 					end
 
 					local out = StandardProcedure(Statement, index)
 					out.Body.Body[2] = nil
 					CollectedInstructions[index] = out
 
-				elseif Statement.AstType == "WhileStatement" then --THIS IS TODO
+				elseif Statement.AstType == "WhileStatement" then
+					CollectedInstructions[index] = {} --Reserve a slot
+					local SubInstructions = CollectInstructionsFromBody(Statement.Body.Body)
+					ForceGoToInstruction(SubInstructions, #SubInstructions+1, 0) --Point the end towards where the starting if check will be (sorted by OffsetInstructions)
+					ExtendInstructions(CollectedInstructions, SubInstructions)
+					ForceGoToInstruction(SubInstructions, "BreakStatement", #CollectedInstructions+1) --Point break statements to beyond the loop
+					ForceGoToInstruction(SubInstructions, "ContinueStatement", index) --Point continue statements to the loop's start
+
 					local NewStatement = {
 						AstType = "IfStatement",
-						Clauses = {},
+						Clauses = {
+							{Condition = Statement.Condition, Body = {AstType="Statlist", Body={CreateInstructionPointer(index+1)}}}, --Point to while body
+							{Body = {AstType="Statlist", Body={CreateInstructionPointer(#CollectedInstructions+1)}}}, --Else, get out
+						},
 					}
-					CollectedInstructions[index] = StandardProcedure(Statement, index)
+					local out = StandardProcedure(NewStatement, index)
+					out.Body.Body[2] = nil
+					CollectedInstructions[index] = out
 
 				elseif Statement.AstType == "RepeatStatement" then --THIS IS TODO
 					CollectedInstructions[index] = StandardProcedure(Statement, index)
@@ -2128,6 +2160,18 @@ local function test(x)
 end
 
 test(1); test(2); test(3); test(4); test(5); test(6); test(7); test(8); test(9); test(10)
+
+local x = 8
+while x > 1 do
+	x = x - 1
+	if x == 5 then
+		continue
+	end
+	if x == 3 then
+		break
+	end
+	print(x)
+end
 
 print("Done")
 ]==]))
