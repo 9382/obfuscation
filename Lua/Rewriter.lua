@@ -1049,7 +1049,7 @@ local function ParseLua(src)
 				return false, GenerateError("`until` expected.")
 			end
 			--
-			local st, cond = ParseExpr(scope)
+			local st, cond = ParseExpr(body.Scope) --use the scope of the body
 			if not st then return false, cond end
 			--
 			local nodeRepeat = {}
@@ -1563,7 +1563,24 @@ local function FlattenControlFlow(ast)
 					CollectedInstructions[index] = out
 
 				elseif Statement.AstType == "RepeatStatement" then --THIS IS TODO
-					CollectedInstructions[index] = StandardProcedure(Statement, index)
+					local SubInstructions = CollectInstructionsFromBody(Statement.Body.Body)
+					--We don't point the instructions pointing to the end anywhere else since we are about to add a statement on the end to handle the loop end
+					ExtendInstructions(CollectedInstructions, SubInstructions)
+					local LoopEndHandler = #CollectedInstructions+1
+					local ExitInstruction = #CollectedInstructions+2
+					ForceGoToInstruction(SubInstructions, "BreakStatement", ExitInstruction) --Point break statements to beyond the loop
+					ForceGoToInstruction(SubInstructions, "ContinueStatement", LoopEndHandler) --Point continue statements to the loop's end handler
+
+					local NewStatement = {
+						AstType = "IfStatement",
+						Clauses = {
+							{Condition = Statement.Condition, Body = {AstType="Statlist", Body={CreateInstructionPointer(ExitInstruction)}}}, --Point to exit
+							{Body = {AstType="Statlist", Body={CreateInstructionPointer(index)}}}, --Else, keep going
+						},
+					}
+					local out = StandardProcedure(NewStatement, LoopEndHandler)
+					out.Body.Body[2] = nil
+					CollectedInstructions[LoopEndHandler] = out
 
 				elseif Statement.AstType == "DoStatement" then
 					ExtendInstructions(CollectedInstructions, CollectInstructionsFromBody(Statement.Body.Body)) --cool one-liner (all variable stuff was handled step 1)
@@ -2255,6 +2272,17 @@ end
 for i = 5, 10, 2 do
 	print("loop i2", i)
 end
+
+repeat
+	local x = 5
+	print("Test")
+until x == 5
+
+local counter = 1
+repeat
+	print("Counter!", counter)
+	counter = counter + 1
+until counter > 5
 
 print("Done")
 ]==]))
