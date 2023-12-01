@@ -1568,7 +1568,44 @@ local function FlattenControlFlow(ast)
 				elseif Statement.AstType == "DoStatement" then
 					ExtendInstructions(CollectedInstructions, CollectInstructionsFromBody(Statement.Body.Body)) --cool one-liner (all variable stuff was handled step 1)
 
-				elseif Statement.AstType == "NumericForStatement" or Statement.AstType == "GenericForStatement" then --THIS IS TODO
+				elseif Statement.AstType == "NumericForStatement" then
+					CollectedInstructions[index] = {} --Reserve 2 slots
+					CollectedInstructions[index+1] = {}
+					local SubInstructions = CollectInstructionsFromBody(Statement.Body.Body)
+					--We don't point the instructions pointing to the end anywhere else since we are about to add a statement on the end to handle the loop end
+					ExtendInstructions(CollectedInstructions, SubInstructions)
+					local LoopEndHandler = #CollectedInstructions+1
+					local ExitInstruction = #CollectedInstructions+2
+					ForceGoToInstruction(SubInstructions, "BreakStatement", ExitInstruction) --Point break statements to beyond the loop
+					ForceGoToInstruction(SubInstructions, "ContinueStatement", LoopEndHandler) --Point continue statements to the loop's end handler
+
+					Statement.Variable = {AstType="VarExpr", Name=Statement.Variable.Name, Local=Statement.Variable}
+					CollectedInstructions[index] = StandardProcedure({
+						AstType = "AssignmentStatement",
+						Lhs = {Statement.Variable},
+						Rhs = {Statement.Start}
+					}, index) --Step 1: define the variable
+					local IfCheck = StandardProcedure({
+						AstType = "IfStatement",
+						Clauses = {
+							{
+								Condition = {AstType="BinopExpr", Op="<=", Lhs=Statement.Variable, Rhs=Statement.End},
+								Body = {AstType="Statlist", Body={CreateInstructionPointer(index+2)}} --Point to loop body
+							},
+							{Body = {AstType="Statlist", Body={CreateInstructionPointer(ExitInstruction)}}}, --Else, get out
+						},
+					}, index+1) --Step 2: check where we should go
+					IfCheck.Body.Body[2] = nil
+					CollectedInstructions[index+1] = IfCheck
+					local LoopEnd = StandardProcedure({
+						AstType = "AssignmentStatement",
+						Lhs = {Statement.Variable},
+						Rhs = {{AstType="BinopExpr", Op="+", Lhs=Statement.Variable, Rhs=Statement.Step or {AstType="NumberExpr", Value={Data="1"}}}}
+					}, LoopEndHandler) --Step Loop+1: Increment and go back to the check
+					LoopEnd.Body.Body[2].Rhs[1].Value.Data = tostring(index+1)
+					CollectedInstructions[LoopEndHandler] = LoopEnd
+
+				elseif Statement.AstType == "GenericForStatement" then --THIS IS TODO
 					CollectedInstructions[index] = StandardProcedure(Statement, index)
 
 				--Else, normal stuff
@@ -1890,7 +1927,7 @@ local function WriteExpression(Expression, Scope)
 		return "(" .. WriteExpression(Expression.Lhs, Scope) .. ConsiderSpacingOperator(Expression.Op) .. WriteExpression(Expression.Rhs, Scope) .. ")"
 
 	end
-	error("We didn't return on a expression!? " .. tostring(Expression) .. " " .. (type(Expression)=="table" and tostring(Expression.AstType) or "<no AST>"))
+	error("We didn't return on an expression!? " .. tostring(Expression) .. " " .. (type(Expression)=="table" and tostring(Expression.AstType) or "<no AST>"))
 end
 
 local function WriteStatement(Statement, Scope)
@@ -2209,6 +2246,14 @@ while x > 1 do
 		break
 	end
 	print(x)
+end
+
+local i = 1
+for i = 5, 10 do
+	print("loop i1", i)
+end
+for i = 5, 10, 2 do
+	print("loop i2", i)
 end
 
 print("Done")
