@@ -1402,17 +1402,24 @@ local function FlattenControlFlow(ast)
 				Condition = CreateInstructionCheck(index)
 			}
 		end
-		local function OffsetInstructions(t, offset, blacklist)
+		local function OffsetInstructions(t, offset, minimum, blacklist)
+			minimum = minimum or -9e9
 			blacklist = blacklist or {}
 			blacklist[t] = true
 			for k,v in next,t do
 				if type(v) == "table" and k ~= "Scope" and not blacklist[v] then
-					if v.AstType == "AssignmentStatement" and v.Lhs[1] == InstructionExpression and tonumber(v.Rhs[1].Value.Data) then
-						v.Rhs[1].Value.Data = tostring(tonumber(v.Rhs[1].Value.Data)+offset)
+					if v.AstType == "AssignmentStatement" and v.Lhs[1] == InstructionExpression then
+						local cur = tonumber(v.Rhs[1].Value.Data)
+						if cur and cur > minimum then
+							v.Rhs[1].Value.Data = tostring(cur+offset)
+						end
 					elseif v.AstType == "BinopExpr" and v.Lhs == InstructionExpression and tonumber(v.Rhs.Value.Data) then
-						v.Rhs.Value.Data = tostring(tonumber(v.Rhs.Value.Data)+offset)
+						local cur = tonumber(v.Rhs.Value.Data)
+						if cur and cur > minimum then
+							v.Rhs.Value.Data = tostring(cur+offset)
+						end
 					else
-						OffsetInstructions(v, offset, blacklist)
+						OffsetInstructions(v, offset, minimum, blacklist)
 					end
 				end
 			end
@@ -1425,24 +1432,24 @@ local function FlattenControlFlow(ast)
 			end
 			OffsetInstructions(NewInstructions, offset)
 		end
-		local function CollectInstructionsFromBody(Body)
-			local CollectedInstructions = {}
-			local function ForceGoToInstruction(t, old, new, blacklist) --DeepScan3 :):):):)
-				blacklist = blacklist or {}
-				blacklist[t] = true
-				for k,v in next,t do
-					if type(v) == "table" and k ~= "Scope" and not blacklist[v] then
-						if v.AstType == "AssignmentStatement" and v.Lhs[1] == InstructionExpression then
-							local Value = v.Rhs[1].Value
-							if not old or Value.Data == tostring(old) then
-								Value.Data = tostring(new)
-							end
-						else
-							ForceGoToInstruction(v, old, new, blacklist)
+		local function ForceGoToInstruction(t, old, new, blacklist) --DeepScan3 :):):):)
+			blacklist = blacklist or {}
+			blacklist[t] = true
+			for k,v in next,t do
+				if type(v) == "table" and k ~= "Scope" and not blacklist[v] then
+					if v.AstType == "AssignmentStatement" and v.Lhs[1] == InstructionExpression then
+						local Value = v.Rhs[1].Value
+						if not old or Value.Data == tostring(old) then
+							Value.Data = tostring(new)
 						end
+					else
+						ForceGoToInstruction(v, old, new, blacklist)
 					end
 				end
 			end
+		end
+		local function CollectInstructionsFromBody(Body)
+			local CollectedInstructions = {}
 			for _,Statement in ipairs(Body) do
 				local index = #CollectedInstructions+1
 
@@ -1487,7 +1494,7 @@ local function FlattenControlFlow(ast)
 				elseif Statement.AstType == "IfStatement" then
 					--CONSIDER: Full flattening (splitting each elseif into a new if else instruction) - this'll be very complex but very flat
 					--CONSIDER: Improving the fake-else statement to skip over all instructions by directly pointing to the final instruction instead of allocating a dummy slot
-					--(This could also be done in post-processing but doing it here is more efficient)
+					--(This is done in post-processing but doing it here is more efficient)
 					local Clauses = Statement.Clauses
 					CollectedInstructions[index] = {} --Reserve a slot
 					local AllInstructions = {}
@@ -1560,7 +1567,24 @@ local function FlattenControlFlow(ast)
 		CollectedInstructions = CollectInstructionsFromBody(Body)
 		--]===]
 
-		--Step 3: Shuffle the statement order for obscurity
+		--Step 3: Do some post-processing on the instructions
+		--Clear dummy statements
+		local DummiesCleared = 0
+		for i = #CollectedInstructions, 1, -1 do
+			local Instruction = CollectedInstructions[i]
+			local InstructionBody = Instruction.Body.Body
+			if #InstructionBody == 1 and InstructionBody[1].AstType == "AssignmentStatement" and InstructionBody[1].Lhs[1] == InstructionExpression then
+				local DummyTarget = InstructionBody[1].Rhs[1].Value.Data
+				table.remove(CollectedInstructions, i)
+				ForceGoToInstruction(CollectedInstructions, i, DummyTarget) --Point anything that pointed to the dummy to the dummy's target instead
+				OffsetInstructions(CollectedInstructions, -1, i) --Knock down by an index anything that was at this instruction or higher
+				DummiesCleared = DummiesCleared + 1
+			end
+		end
+		if DummiesCleared > 0 then
+			print("[Flattener] Removed " .. DummiesCleared .. " dummy/proxy statements")
+		end
+		--Shuffle it
 		--TODO: Actually change instruction numbers too for extra obscurity
 		local ToShuffle = {}
 		for a,b in next,CollectedInstructions do
