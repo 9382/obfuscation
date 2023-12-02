@@ -1297,6 +1297,8 @@ local function FlattenControlFlow(ast)
 								Name.Name = NewName
 								Variables[#Variables+1] = NewName
 							end
+						elseif v.Name then --Potentially a member expression or something, give it a check
+							DeepScan(v, IsPreDefined, blacklist)
 						end
 						v.Body.Body = PerformFlattening(v.Body.Body, v.Arguments, ScopesBefore+1)
 					elseif v.AstType == "VarExpr" then
