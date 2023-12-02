@@ -1354,6 +1354,12 @@ local function FlattenControlFlow(ast)
 						or v.AstType == "NumericForStatement"
 						or v.AstType == "GenericForStatement" then
 						ScopeChain[#ScopeChain+1] = v.Body.Scope
+						if v.AstType == "NumericForStatement" then
+							v.DedicatedVariable = {AstType="VarExpr", Name=v.Variable.Name.."__dedicated", Local={CanRename=true, Scope=v.Body.Scope, Name=v.Variable.Name .. "__dedicated"}}
+						elseif v.AstType == "GenericForStatement" then
+							local FirstVar = v.VariableList[1]
+							v.DedicatedVariable = {AstType="VarExpr", Name=FirstVar.Name.."__dedicated", Local={CanRename=true, Scope=v.Body.Scope, Name=FirstVar.Name .. "__dedicated"}}
+						end
 						DeepScan(v, IsPreDefined, blacklist)
 						ScopeChain[#ScopeChain] = nil
 						ClearUsedVariables(v.Body.Scope)
@@ -1586,8 +1592,9 @@ local function FlattenControlFlow(ast)
 					ExtendInstructions(CollectedInstructions, CollectInstructionsFromBody(Statement.Body.Body)) --cool one-liner (all variable stuff was handled step 1)
 
 				elseif Statement.AstType == "NumericForStatement" then
-					CollectedInstructions[index] = {} --Reserve 2 slots
+					CollectedInstructions[index] = {} --Reserve 3 slots
 					CollectedInstructions[index+1] = {}
+					CollectedInstructions[index+2] = {}
 					local SubInstructions = CollectInstructionsFromBody(Statement.Body.Body)
 					--We don't point the instructions pointing to the end anywhere else since we are about to add a statement on the end to handle the loop end
 					ExtendInstructions(CollectedInstructions, SubInstructions)
@@ -1599,9 +1606,14 @@ local function FlattenControlFlow(ast)
 					Statement.Variable = {AstType="VarExpr", Name=Statement.Variable.Name, Local=Statement.Variable}
 					CollectedInstructions[index] = StandardProcedure({
 						AstType = "AssignmentStatement",
-						Lhs = {Statement.Variable},
+						Lhs = {Statement.DedicatedVariable},
 						Rhs = {Statement.Start}
-					}, index) --Step 1: define the variable
+					}, index) --Step 1: define the dedicated variable
+					CollectedInstructions[index+1] = StandardProcedure({
+						AstType = "AssignmentStatement",
+						Lhs = {Statement.Variable},
+						Rhs = {Statement.DedicatedVariable}
+					}, index+1) --Step 2: set the standard variable to the dedicated variable
 					local IfCheck = StandardProcedure({
 						AstType = "IfStatement",
 						Clauses = {
@@ -1611,13 +1623,13 @@ local function FlattenControlFlow(ast)
 							},
 							{Body = {AstType="Statlist", Body={CreateInstructionPointer(ExitInstruction)}}}, --Else, get out
 						},
-					}, index+1) --Step 2: check where we should go
+					}, index+2) --Step 3: check where we should go
 					IfCheck.Body.Body[2] = nil
-					CollectedInstructions[index+1] = IfCheck
+					CollectedInstructions[index+2] = IfCheck
 					local LoopEnd = StandardProcedure({
 						AstType = "AssignmentStatement",
-						Lhs = {Statement.Variable},
-						Rhs = {{AstType="BinopExpr", Op="+", Lhs=Statement.Variable, Rhs=Statement.Step or {AstType="NumberExpr", Value={Data="1"}}}}
+						Lhs = {Statement.DedicatedVariable},
+						Rhs = {{AstType="BinopExpr", Op="+", Lhs=Statement.DedicatedVariable, Rhs=Statement.Step or {AstType="NumberExpr", Value={Data="1"}}}}
 					}, LoopEndHandler) --Step Loop+1: Increment and go back to the check
 					LoopEnd.Body.Body[2].Rhs[1].Value.Data = tostring(index+1)
 					CollectedInstructions[LoopEndHandler] = LoopEnd
