@@ -610,9 +610,6 @@ local function ParseLua(src)
 		while true do
 			if tok:IsSymbol('.') or tok:IsSymbol(':') then
 				local symb = tok:Get().Data
-				if symb == ":" then
-					scope:CreateLocal("self")
-				end
 				if not tok:Is('Ident') then
 					return false, GenerateError("<Ident> expected.")
 				end
@@ -1070,6 +1067,9 @@ local function ParseLua(src)
 			--
 			func.IsLocal = false
 			func.Name = name
+			if name.Indexer == ":" then
+				func.Scope:CreateLocal("self")
+			end
 			stat = func
 
 		elseif tok:ConsumeKeyword('local') then
@@ -1269,17 +1269,19 @@ Most languages bring in new scopes per function, but we get new scopes per any s
 This forces us to do some quite ugly and unreliable self-management
 --]]
 local function FlattenControlFlow(ast)
-	local function PerformFlattening(Body, FunctionVariables, ScopesBefore)
-		ScopesBefore = ScopesBefore or 0
+	local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
+		local BodyScope = Body.Scope
+		Body = Body.Body
+		FunctionDepth = FunctionDepth or 0
 		local NewAST = {}
 		--Step 1: Variable collection and scope calculations
 		local Variables = {}
 		local InstructionPointer = "__ins" .. math.random(1e4,1e5-1) .. "__"
-		local InstructionExpression = {AstType="VarExpr", Name=InstructionPointer, Local={CanRename=true, Scope=Body.Scope, Name=InstructionPointer}}
+		local InstructionExpression = {AstType="VarExpr", Name=InstructionPointer, Local={CanRename=true, Scope=BodyScope, Name=InstructionPointer}}
 		Variables[1] = InstructionPointer
-		local ScopeChain = {Body.Scope}
+		local ScopeChain = {BodyScope}
 		local function GetNewVariable(VarName)
-			return VarName .. "__ver_" .. ScopesBefore .. "_" .. #ScopeChain
+			return VarName .. "__ver_" .. FunctionDepth .. "_" .. #ScopeChain
 		end
 		local function DeepScan(t, IsPreDefined, blacklist)
 			blacklist = blacklist or {}
@@ -1300,7 +1302,7 @@ local function FlattenControlFlow(ast)
 						elseif v.Name then --Potentially a member expression or something, give it a check
 							DeepScan(v.Name, IsPreDefined, blacklist)
 						end
-						v.Body.Body = PerformFlattening(v.Body.Body, v.Arguments, ScopesBefore+1)
+						v.Body.Body = PerformFlattening(v.Body, v.Arguments, FunctionDepth+1)
 					elseif v.AstType == "VarExpr" then
 						if v.Local and not v.TrueName then
 							if not v.Local.TrueName then
@@ -1372,7 +1374,7 @@ local function FlattenControlFlow(ast)
 		local VariableObjects = {}
 		for i,Variable in next,Variables do
 			if not SeenVariables[Variable] then
-				VariableObjects[#VariableObjects+1] = {CanRename=true, Scope=Body.Scope, Name=Variable}
+				VariableObjects[#VariableObjects+1] = {CanRename=true, Scope=BodyScope, Name=Variable}
 				SeenVariables[Variable] = true
 			else
 				print("WARNING: Double-definition of local " .. Variable .. " found during flattening - no guarantee of expected behaviour")
@@ -1394,7 +1396,7 @@ local function FlattenControlFlow(ast)
 		end
 		local function StandardProcedure(Statement, index, forceNext)
 			return {
-				Body = {AstType="Statlist", Scope=Body.Scope, Body={
+				Body = {AstType="Statlist", Scope=BodyScope, Body={
 					Statement,
 					CreateInstructionPointer(forceNext or index+1),
 				}},
@@ -1460,7 +1462,7 @@ local function FlattenControlFlow(ast)
 					Statement.AstType = "AssignmentStatement"
 					Statement.Lhs = Statement.LocalList
 					for i,Lhs in ipairs(Statement.Lhs) do
-						Statement.Lhs[i] = {AstType="VarExpr", Name=Lhs.Name, Local={CanRename=true, Scope=Body.Scope, Name=Lhs.Name}}
+						Statement.Lhs[i] = {AstType="VarExpr", Name=Lhs.Name, Local={CanRename=true, Scope=BodyScope, Name=Lhs.Name}}
 					end
 					Statement.Rhs = Statement.InitList
 					if #Statement.Rhs == 0 then
@@ -1475,7 +1477,7 @@ local function FlattenControlFlow(ast)
 					local FuncName = Statement.Name.Name
 					CollectedInstructions[index] = StandardProcedure({
 						AstType = "AssignmentStatement",
-						Lhs = {{AstType="VarExpr", Name=FuncName, Local={CanRename=true, Scope=Body.Scope, name=FuncName}}},
+						Lhs = {{AstType="VarExpr", Name=FuncName, Local={CanRename=true, Scope=BodyScope, name=FuncName}}},
 						Rhs = {Statement},
 					}, index)
 
@@ -1502,7 +1504,7 @@ local function FlattenControlFlow(ast)
 					local AllInstructions = {}
 					local HasACatchAll = not Statement.Clauses[#Statement.Clauses].Condition
 					if not HasACatchAll then
-						Statement.Clauses[#Statement.Clauses+1] = {Body={AstType="Stalist", Scope=Body.Scope, Body={}}} --this just works with no adjustment, /shrug
+						Statement.Clauses[#Statement.Clauses+1] = {Body={AstType="Stalist", Scope=BodyScope, Body={}}} --this just works with no adjustment, /shrug
 					end
 
 					for i,Clause in next,Statement.Clauses do
@@ -1713,7 +1715,7 @@ local function FlattenControlFlow(ast)
 			},
 			Body = {
 				AstType = "Statlist",
-				Scope = Body.Scope,
+				Scope = BodyScope,
 				Body = {{
 					AstType = "IfStatement",
 					Clauses = CollectedInstructions
@@ -1724,7 +1726,7 @@ local function FlattenControlFlow(ast)
 		--Done!
 		return NewAST
 	end
-	ast.Body = PerformFlattening(ast.Body)
+	ast.Body = PerformFlattening(ast)
 end
 
 local RewriterOptions = {
@@ -1996,9 +1998,6 @@ local function WriteStatement(Statement, Scope)
 		end
 		local SubScope = CreateExecutionScope(Scope)
 		local NewArguments = {}
-		if Statement.Name.AstType == "MemberExpr" and Statement.Name.Indexer == ":" then
-			NewArguments[1] = SubScope:MakeLocal("self", "self")
-		end
 		for i,Argument in ipairs(Statement.Arguments) do
 			NewArguments[i] = SubScope:MakeLocal(Argument.Name)
 		end
