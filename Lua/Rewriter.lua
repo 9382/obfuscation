@@ -1278,24 +1278,8 @@ local function FlattenControlFlow(ast)
 		local InstructionExpression = {AstType="VarExpr", Name=InstructionPointer, Local={CanRename=true, Scope=Body.Scope, Name=InstructionPointer}}
 		Variables[1] = InstructionPointer
 		local ScopeChain = {Body.Scope}
-		local VariableCounts = setmetatable({}, {
-			__index=function(t,k)
-				local v = {}
-				rawset(t,k,v)
-				return v
-			end
-		})
 		local function GetNewVariable(VarName)
-			local Count = VariableCounts[VarName]
-			Count[#Count+1] = ScopeChain[#ScopeChain]
-			return VarName .. "__ver_" .. ScopesBefore .. "_" .. #Count
-		end
-		local function ClearUsedVariables(Scope)
-			for var,data in next,VariableCounts do
-				if data[#data] == Scope then
-					data[#data] = nil
-				end
-			end
+			return VarName .. "__ver_" .. ScopesBefore .. "_" .. #ScopeChain
 		end
 		local function DeepScan(t, IsPreDefined, blacklist)
 			blacklist = blacklist or {}
@@ -1307,7 +1291,7 @@ local function FlattenControlFlow(ast)
 							--This is just to fix local functions that get defined but never used
 							--What if you just didn't do that in the first place? :)
 							local Name = v.Name
-							if not Name.TrueName then
+							if Name and not Name.TrueName then
 								local NewName = GetNewVariable(Name.Name)
 								Name.TrueName = Name.Name
 								Name.Name = NewName
@@ -1316,18 +1300,16 @@ local function FlattenControlFlow(ast)
 						end
 						v.Body.Body = PerformFlattening(v.Body.Body, v.Arguments, ScopesBefore+1)
 					elseif v.AstType == "VarExpr" then
-						if v.Local then
-							if not v.TrueName and v.Local then
-								if not v.Local.TrueName then
-									local NewName = GetNewVariable(v.Local.Name)
-									v.Local.TrueName = v.Local.Name
-									v.Local.Name = NewName
-									v.Name = NewName --not required since rewriter only uses local name but its good practice
-									Variables[#Variables+1] = NewName
-								end
-								v.TrueName = v.Local.TrueName
-								v.Name = v.Local.Name --Don't declare new variable scope if its just another occurance, that gets indicated by new lcoal
+						if v.Local and not v.TrueName then
+							if not v.Local.TrueName then
+								local NewName = GetNewVariable(v.Local.Name)
+								v.Local.TrueName = v.Local.Name
+								v.Local.Name = NewName
+								v.Name = NewName --not required since rewriter only uses local name but its good practice
+								Variables[#Variables+1] = NewName
 							end
+							v.TrueName = v.Local.TrueName
+							v.Name = v.Local.Name --Don't declare new variable scope if its just another occurance, that gets indicated by new lcoal
 						end --no need to scan a VarExpr
 					elseif v.AstType == "LocalStatement" then
 						for _,Local in next,v.LocalList do
@@ -1343,9 +1325,8 @@ local function FlattenControlFlow(ast)
 						--for clause in statement
 						for _,Clause in next,v.Clauses do
 							ScopeChain[#ScopeChain+1] = Clause.Body.Scope
-							DeepScan(Clause, blacklist)
+							DeepScan(Clause, IsPreDefined, blacklist)
 							ScopeChain[#ScopeChain] = nil
-							ClearUsedVariables(Clause.Body.Scope)
 						end
 						DeepScan(v, IsPreDefined, blacklist)
 					elseif v.AstType == "WhileStatement"
@@ -1366,7 +1347,6 @@ local function FlattenControlFlow(ast)
 						end
 						DeepScan(v, IsPreDefined, blacklist)
 						ScopeChain[#ScopeChain] = nil
-						ClearUsedVariables(v.Body.Scope)
 					elseif v.CanRename then --The raw form of a Local which we've somehow come across (probably a function arg)
 						if not v.TrueName then
 							local NewName = GetNewVariable(v.Name)
