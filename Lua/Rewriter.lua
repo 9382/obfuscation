@@ -1403,13 +1403,6 @@ local function FlattenControlFlow(ast)
 		}
 
 		--Step 2: Compile the statements
-		local function CreateInstructionCheck(index)
-			return {
-				AstType="BinopExpr", Op="==",
-				Rhs={AstType="NumberExpr", Value={Data=tostring(index)}},
-				Lhs=InstructionExpression,
-			}
-		end
 		local function CreateInstructionPointer(nextIndex)
 			return {
 				AstType="AssignmentStatement",
@@ -1423,10 +1416,14 @@ local function FlattenControlFlow(ast)
 					Statement,
 					CreateInstructionPointer(forceNext or index+1),
 				}},
-				Condition = CreateInstructionCheck(index)
+				Condition = {
+					AstType="BinopExpr", Op="==",
+					Rhs={AstType="NumberExpr", Value={Data=tostring(index)}},
+					Lhs=InstructionExpression,
+				}
 			}
 		end
-		local function OffsetInstructions(t, offset, minimum, blacklist)
+		local function OffsetInstructions(t, offset, minimum, blacklist) --This is my punishment for not being modular - round 2!
 			minimum = minimum or -9e9
 			blacklist = blacklist or {}
 			blacklist[t] = true
@@ -1449,7 +1446,6 @@ local function FlattenControlFlow(ast)
 			end
 		end
 		local function ExtendInstructions(BaseInstructions, NewInstructions)
-			--This is my punishment for not being modular - round 2!
 			local offset = #BaseInstructions
 			for i = 1,#NewInstructions do
 				BaseInstructions[i+offset] = NewInstructions[i]
@@ -1572,7 +1568,7 @@ local function FlattenControlFlow(ast)
 					out.Body.Body[2] = nil
 					CollectedInstructions[index] = out
 
-				elseif Statement.AstType == "RepeatStatement" then --THIS IS TODO
+				elseif Statement.AstType == "RepeatStatement" then
 					local SubInstructions = CollectInstructionsFromBody(Statement.Body.Body)
 					--We don't point the instructions pointing to the end anywhere else since we are about to add a statement on the end to handle the loop end
 					ExtendInstructions(CollectedInstructions, SubInstructions)
@@ -1695,7 +1691,6 @@ local function FlattenControlFlow(ast)
 			return CollectedInstructions
 		end
 		CollectedInstructions = CollectInstructionsFromBody(Body)
-		--]===]
 
 		--Step 3: Do some post-processing on the instructions
 		--Clear dummy statements
@@ -1720,10 +1715,10 @@ local function FlattenControlFlow(ast)
 		for a,b in next,CollectedInstructions do
 			ToShuffle[a] = b
 		end
-		-- CollectedInstructions={}
-		-- while #ToShuffle>0 do
-		-- 	CollectedInstructions[#CollectedInstructions+1] = table.remove(ToShuffle, math.random(1, #ToShuffle))
-		-- end
+		CollectedInstructions={}
+		while #ToShuffle>0 do
+			CollectedInstructions[#CollectedInstructions+1] = table.remove(ToShuffle, math.random(1, #ToShuffle))
+		end
 
 		--Wrap it up
 		NewAST[2] = {
@@ -2273,95 +2268,7 @@ print((function(C)
 	local result = WriteStatList(p, CreateExecutionScope(), true)
 	return true, table.concat(result,"\n")
 end)([==[
-print("Start")
-
-local function test(x)
-	if x < 5 then
-		if x < 4 then
-			if x > 2 then
-				print("x == 3")
-			end
-			if x > 1 then
-				print("2 <= x <= 3")
-			else
-				print("x == 1")
-			end
-		else
-			print("x == 4")
-		end
-		print("x < 5")
-	elseif x < 10 then
-		if x > 7 then
-			if x < 9 then
-				print("x == 8")
-			elseif x < 8 then
-				print("FAIL CASE")
-			elseif x < 10 then
-				print("x == 9")
-			end
-		elseif x > 6 then
-			print("x == 7")
-		else
-			if x == 5 then
-				print("x == 5")
-			end
-			print("5 <= x <= 6")
-		end
-	else
-		print("x >= 10")
-	end
-	print()
-end
-
-test(1); test(2); test(3); test(4); test(5); test(6); test(7); test(8); test(9); test(10)
-
-local x = 8
-while x > 1 do
-	x = x - 1
-	if x == 5 then
-		continue
-	end
-	if x == 3 then
-		break
-	end
-	print(x)
-end
-
-local i = 1
-for i = 5, 10 do
-	print("loop i1", i)
-	i = i + 1
-end
-for i = 5, 10, 2 do
-	print("loop i2", i)
-end
-
-repeat
-	local x = 5
-	print("Test")
-until x == 5
-
-local counter = 1
-repeat
-	print("Counter!", counter)
-	counter = counter + 1
-until counter > 5
-
-local t = {6, 7, 8, 9, 10}
-for a,b in next,t do
-	print("Woohoo", a, b)
-	a = 3
-end
-for a,b in next,t,3 do
-	print("Woohoo", a, b)
-	a = 3
-end
-for a,b in pairs(t) do
-	print("Woohoo", a, b)
-	a = 3
-end
-
-print("Done")
+print("Test")
 ]==]))
 
 return function(C)
