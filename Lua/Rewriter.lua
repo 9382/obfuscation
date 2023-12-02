@@ -1340,7 +1340,13 @@ local function FlattenControlFlow(ast)
 						or v.AstType == "GenericForStatement" then
 						ScopeChain[#ScopeChain+1] = v.Body.Scope
 						if v.AstType == "NumericForStatement" then
+							local StartName = "_start__dedicated"
+							local FinishName = "_finish__dedicated"
+							local StepName = "_step__dedicated"
 							v.DedicatedVariable = {AstType="VarExpr", Name=v.Variable.Name.."__dedicated", Local={CanRename=true, Scope=v.Body.Scope, Name=v.Variable.Name .. "__dedicated"}}
+							v.DedicatedStart = {AstType="VarExpr", Name=StartName, Local={CanRename=true, Scope=v.Body.Scope, Name=StartName}}
+							v.DedicatedFinish = {AstType="VarExpr", Name=FinishName, Local={CanRename=true, Scope=v.Body.Scope, Name=FinishName}}
+							v.DedicatedStep = {AstType="VarExpr", Name=StepName, Local={CanRename=true, Scope=v.Body.Scope, Name=StepName}}
 						elseif v.AstType == "GenericForStatement" then
 							local KeyName = "_key__dedicated"--v.VariableList[1].Name.."__dedicated"
 							local GenName = "_gen__dedicated"--__"..math.random(1e4,1e5-1)
@@ -1576,9 +1582,10 @@ local function FlattenControlFlow(ast)
 					ExtendInstructions(CollectedInstructions, CollectInstructionsFromBody(Statement.Body.Body)) --cool one-liner (all variable stuff was handled step 1)
 
 				elseif Statement.AstType == "NumericForStatement" then
-					CollectedInstructions[index] = {} --Reserve 3 slots
+					CollectedInstructions[index] = {} --Reserve 4 slots
 					CollectedInstructions[index+1] = {}
 					CollectedInstructions[index+2] = {}
+					CollectedInstructions[index+3] = {}
 					local SubInstructions = CollectInstructionsFromBody(Statement.Body.Body)
 					--We don't point the instructions pointing to the end anywhere else since we are about to add a statement on the end to handle the loop end
 					ExtendInstructions(CollectedInstructions, SubInstructions)
@@ -1590,32 +1597,49 @@ local function FlattenControlFlow(ast)
 					Statement.Variable = {AstType="VarExpr", Name=Statement.Variable.Name, Local=Statement.Variable}
 					CollectedInstructions[index] = StandardProcedure({
 						AstType = "AssignmentStatement",
-						Lhs = {Statement.DedicatedVariable},
-						Rhs = {Statement.Start}
-					}, index) --Step 1: define the dedicated variable
+						Lhs = {Statement.DedicatedStart, Statement.DedicatedFinish, Statement.DedicatedStep},
+						Rhs = {Statement.Start, Statement.End, Statement.Step or {AstType="NumberExpr", Value={Data="1"}}}
+					}, index)
 					CollectedInstructions[index+1] = StandardProcedure({
+						AstType = "AssignmentStatement",
+						Lhs = {Statement.DedicatedVariable},
+						Rhs = {Statement.DedicatedStart}
+					}, index+1)
+					CollectedInstructions[index+2] = StandardProcedure({
 						AstType = "AssignmentStatement",
 						Lhs = {Statement.Variable},
 						Rhs = {Statement.DedicatedVariable}
-					}, index+1) --Step 2: set the standard variable to the dedicated variable
+					}, index+2)
 					local IfCheck = StandardProcedure({
 						AstType = "IfStatement",
 						Clauses = {
 							{
-								Condition = {AstType="BinopExpr", Op="<=", Lhs=Statement.Variable, Rhs=Statement.End},
-								Body = {AstType="Statlist", Body={CreateInstructionPointer(index+3)}} --Point to loop body
+								Condition = {AstType="BinopExpr", Op="or", Lhs={
+									AstType="BinopExpr", Op="and", Lhs={
+										AstType="BinopExpr", Op=">=", Lhs=Statement.DedicatedStep, Rhs={AstType="NumberExpr", Value={Data="0"}}
+									}, Rhs = {
+										AstType="BinopExpr", Op="<=", Lhs=Statement.Variable, Rhs=Statement.DedicatedFinish
+									}
+								}, Rhs={
+									AstType="BinopExpr", Op="and", Lhs={
+										AstType="BinopExpr", Op="<=", Lhs=Statement.DedicatedStep, Rhs={AstType="NumberExpr", Value={Data="0"}}
+									}, Rhs = {
+										AstType="BinopExpr", Op=">=", Lhs=Statement.Variable, Rhs=Statement.DedicatedFinish
+									}
+								}},
+								Body = {AstType="Statlist", Body={CreateInstructionPointer(index+4)}} --Point to loop body
 							},
 							{Body = {AstType="Statlist", Body={CreateInstructionPointer(ExitInstruction)}}}, --Else, get out
 						},
-					}, index+2) --Step 3: check where we should go
+					}, index+3) --Step 3: check where we should go
 					IfCheck.Body.Body[2] = nil
-					CollectedInstructions[index+2] = IfCheck
+					CollectedInstructions[index+3] = IfCheck
 					local LoopEnd = StandardProcedure({
 						AstType = "AssignmentStatement",
 						Lhs = {Statement.DedicatedVariable},
-						Rhs = {{AstType="BinopExpr", Op="+", Lhs=Statement.DedicatedVariable, Rhs=Statement.Step or {AstType="NumberExpr", Value={Data="1"}}}}
+						Rhs = {{AstType="BinopExpr", Op="+", Lhs=Statement.DedicatedVariable, Rhs=Statement.DedicatedStep or {AstType="NumberExpr", Value={Data="1"}}}}
 					}, LoopEndHandler) --Step Loop+1: Increment and go back to the check
-					LoopEnd.Body.Body[2].Rhs[1].Value.Data = tostring(index+1)
+					LoopEnd.Body.Body[2].Rhs[1].Value.Data = tostring(index+2)
 					CollectedInstructions[LoopEndHandler] = LoopEnd
 
 				elseif Statement.AstType == "GenericForStatement" then
