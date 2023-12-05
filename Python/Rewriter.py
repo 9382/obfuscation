@@ -447,12 +447,15 @@ def CreateExecutionLoop(code):
 			return f"{ExecuteExpression(expr.context_expr, scope)} as {ExecuteExpression(expr.optional_vars, scope)}"
 
 		elif exprType in [ast.Tuple, ast.List, ast.Set]:
-			out = []
+			items = []
 			for entry in expr.elts:
-				out.append(ExecuteExpression(entry, scope))
-			out = ", ".join(out)
+				items.append(ExecuteExpression(entry, scope))
+			out = ", ".join(items)
 			if exprType == ast.Tuple:
-				return f"({out})"
+				if len(items) == 1:
+					return f"({out},)"
+				else:
+					return f"({out})"
 			elif exprType == ast.List:
 				return f"[{out}]"
 			elif exprType == ast.Set:
