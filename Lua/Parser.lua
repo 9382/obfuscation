@@ -1542,6 +1542,7 @@ local function deepModify(t, firstCall)
 	t.LeadingWhite = nil
 	local ParenCount = t.ParenCount or 0
 	t.ParenCount = nil
+	t.HasSemicolon = nil
 
 	--Merge similar expressions that have identical functionality
 	if t.AstType == "TableCallExpr" then
