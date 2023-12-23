@@ -370,9 +370,13 @@ local function CreateExecutionLoop(ast)
 			return False --This too
 
 		elseif AstType == 12 then
+			local FinalRhs
 			local function ShouldFullyEvaluate(i)
-				if i == #statement[0] then
-					return executeExpression(statement[0][i], scope) --this being nil (i > #statement[0]), while messy, does actually behave correctly
+				if i >= #statement[0] then
+					if FinalRhs == nil then
+						FinalRhs = {executeExpression(statement[0][#statement[0]], scope)}
+					end
+					return FinalRhs[i-#statement[0]+1]
 				else
 					return ({executeExpression(statement[0][i], scope)})[1]
 				end
