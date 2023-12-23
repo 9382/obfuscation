@@ -1,4 +1,3 @@
-
 -- Due to complications and laziness, this file does not use the modular LuaParser
 -- To resolve this, fix the difference in string processing
 
@@ -1473,6 +1472,10 @@ local serializer = (function()
 
 	return Serialize
 end)()
+
+local _seed = os.time()
+math.randomseed(_seed)
+print("Using seed", _seed)
 
 local ExpressionSet = {
 	--[["Function", ]]"VarExpr", "MemberExpr", "IndexExpr", "CallExpr", "StringCallExpr",

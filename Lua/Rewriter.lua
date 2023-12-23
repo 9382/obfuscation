@@ -2,6 +2,10 @@ local ParseLua = require("LuaParser")
 
 --== BEGIN REWRITER ==--
 
+local _seed = os.time()
+math.randomseed(_seed)
+print("Using seed", _seed)
+
 local RewriterOptions = {
 	--== IndentCharacter ==--
 	-- The character used for indenting
