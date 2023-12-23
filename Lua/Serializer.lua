@@ -1,4 +1,7 @@
 
+-- Due to complications and laziness, this file does not use the modular LuaParser
+-- To resolve this, fix the difference in string processing
+
 --
 -- Minify.lua
 --
@@ -6,20 +9,20 @@
 -- script for usage on Roblox. Needed to deal with Roblox' lack of `require`.
 --
 
-function lookupify(tb)
+local function lookupify(tb)
 	for _, v in pairs(tb) do
 		tb[v] = true
 	end
 	return tb
 end
 
-function CountTable(tb)
+local function CountTable(tb)
 	local c = 0
 	for _ in pairs(tb) do c = c + 1 end
 	return c
 end
 
-function PrintTable(tb, atIndent)
+local function PrintTable(tb, atIndent)
 	if tb.Print then
 		return tb.Print()
 	end
@@ -87,7 +90,7 @@ local BackslashEscaping = {
 	["\\"]="\\", ['"']='"', ["'"]="'", ["["]="[", ["]"]="]"
 }
 
-function LexLua(src)
+local function LexLua(src)
 	--token dump
 	local tokens = {}
 
@@ -456,7 +459,7 @@ function LexLua(src)
 end
 
 
-function ParseLua(src)
+local function ParseLua(src)
 	local st, tok = LexLua(src)
 	if not st then
 		return false, tok
