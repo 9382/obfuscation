@@ -1908,6 +1908,9 @@ local function WriteExpression(Expression, Scope)
 
 	elseif Expression.AstType == "IndexExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
+		if Expression.Base.AstType == "ConstructorExpr" then
+			Base = "(" .. Base .. ")"
+		end
 		return Base .. "[" .. WriteExpression(Expression.Index, Scope) .. "]"
 
 	elseif Expression.AstType == "CallExpr" then
