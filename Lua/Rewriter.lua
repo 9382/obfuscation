@@ -2,6 +2,60 @@ local ParseLua = require("LuaParser")
 
 --== BEGIN REWRITER ==--
 
+local RewriterOptions = {
+	--== IndentCharacter ==--
+	-- The character used for indenting
+	-- Ignored if code is one-lined
+	IndentCharacter = "\t",
+
+	--== UseNewlines ==--
+	-- Whether or not the output should be nicely formatted with newlines
+	UseNewlines = true,
+
+	--== UseSemicolons ==--
+	-- Whether or not to use a semicolon at the end of each expression
+	-- Could help fix "ambiguous syntax" issues
+	-- Recommended to use if UseNewlines is off to avoid potential problems
+	UseSemicolons = false,
+
+	--== AddExtraSpacing ==--
+	-- Adds extra spacing in commas and expressions (E.g. ", " vs ",")
+	AddExtraSpacing = true,
+
+	--== ObscureVariableNames ==--
+	-- Replaces local variable names with complete garbage. The variable must be localised
+	ObscureVariableNames = false,
+
+	--== MinifyVariableNames ==--
+	-- Replaces local variable names with minified characters. The variable must be localised. Takes priority over ObscureVariableNames
+	MinifyVariableNames = true,
+
+	--== ObscureNumbers / ObscureStrings / ObscureGlobals ==--
+	-- Turns normal expressions into complex ones
+	-- ObscureGlobals will only obscure globals normally found in _G (E.g. print or table)
+	-- It will not effect script-made globals for the sake of getfenv()
+	ObscureNumbers = false, --SOMEWHAT IMPLEMENTED
+	ObscureStrings = false, --NOT YET IMPLEMENTED
+	ObscureGlobals = false, --NOT YET IMPLEMENTED
+
+	--== UseShortCallExprs ==--
+	-- This turns statements like print("Test") into print"Test"
+	UseShortCallExprs = false,
+
+	--== AddJunkCode ==--
+	-- This adds code that serves no purpose functionally
+	AddJunkCode = false,
+
+	--== JunkCodeChance ==--
+	-- The chance at each statement that junk code is added if enabled
+	JunkCodeChance = 3/3,
+
+	--== PerformCodeFlattening ==--
+	-- Performs code flattening to help obscure the normal flow of the function
+	-- Note: Current flattening is weak and potentially unreliable, use with caution
+	PerformCodeFlattening = false,
+}
+
 --[[ Control Flow Flattener
 Flattens the control into a straight-line format, with each statement being split up
 
@@ -510,56 +564,6 @@ local function FlattenControlFlow(ast)
 	ast.Body = PerformFlattening(ast)
 end
 
-local RewriterOptions = {
-	--== IndentCharacter ==--
-	-- The character used for indenting
-	-- Ignored if code is one-lined
-	IndentCharacter = "\t",
-
-	--== UseNewlines ==--
-	-- Whether or not the output should be nicely formatted with newlines
-	UseNewlines = true,
-
-	--== UseSemicolons ==--
-	-- Whether or not to use a semicolon at the end of each expression
-	-- Could help fix "ambiguous syntax" issues
-	-- Recommended to use if UseNewlines is off to avoid potential problems
-	UseSemicolons = false,
-
-	--== AddExtraSpacing ==--
-	-- Adds extra spacing in commas and expressions (E.g. ", " vs ",")
-	AddExtraSpacing = true,
-
-	--== ObscureVariableNames ==--
-	-- Replaces local variable names with complete garbage. The variable must be localised
-	ObscureVariableNames = false,
-
-	--== ObscureNumbers / ObscureStrings / ObscureGlobals ==--
-	-- Turns normal expressions into complex ones
-	-- ObscureGlobals will only obscure globals normally found in _G (E.g. print or table)
-	-- It will not effect script-made globals for the sake of getfenv()
-	ObscureNumbers = false, --SOMEWHAT IMPLEMENTED
-	ObscureStrings = false, --NOT YET IMPLEMENTED
-	ObscureGlobals = false, --NOT YET IMPLEMENTED
-
-	--== UseShortCallExprs ==--
-	-- This turns statements like print("Test") into print"Test"
-	UseShortCallExprs = false,
-
-	--== AddJunkCode ==--
-	-- This adds code that serves no purpose functionally
-	AddJunkCode = false,
-
-	--== JunkCodeChance ==--
-	-- The chance at each statement that junk code is added if enabled
-	JunkCodeChance = 3/3,
-
-	--== PerformCodeFlattening ==--
-	-- Performs code flattening to help obscure the normal flow of the function
-	-- Note: Current flattening is weak and potentially unreliable, use with caution
-	PerformCodeFlattening = false,
-}
-
 -- RewriterOptions helper functions
 local CommaSplitter = (RewriterOptions.AddExtraSpacing and ", " or ",")
 local EqualsSplitter = (RewriterOptions.AddExtraSpacing and " = " or "=")
@@ -578,8 +582,8 @@ local function ConsiderSemicolon()
 	end
 end
 
+local _ValidCharacters = "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 local function GenerateRandomString(P1, P2)
-	local ValidCharacters = "abcdefghijklmnopqrstuvwxyz_ABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
 	if P2 then --Min, Max
 		P1 = P2 - math.random(0, P2-P1)
 	elseif P1 then --Exact
@@ -589,14 +593,41 @@ local function GenerateRandomString(P1, P2)
 	end
 	local out = ""
 	for i = 1,P1 do
-		local max = #ValidCharacters
+		local max = #_ValidCharacters
 		if i == 1 then
 			max = max - 10
 		end
 		local choice = math.random(1,max)
-		out = out .. string.sub(ValidCharacters,choice,choice)
+		out = out .. string.sub(_ValidCharacters,choice,choice)
 	end
 	return out
+end
+
+local LastVar = {}
+local function GenerateVariableName()
+	if not RewriterOptions.MinifyVariableNames then
+		return GenerateRandomString()
+	end
+	for i = #LastVar, 1, -1 do
+		if LastVar[i] < #_ValidCharacters and (i ~= 1 or LastVar[i] < #_ValidCharacters-10) then
+			LastVar[i] = LastVar[i] + 1
+			local out = ""
+			for _,j in next,LastVar do
+				out = out .. _ValidCharacters:sub(j, j)
+			end
+			if out == "if" or out == "do" or out == "in" or out == "as" then -- safety
+				return GenerateVariableName()
+			end
+			return out
+		else
+			LastVar[i] = 1
+		end
+	end
+	-- Reached loop end, restart and become bigger
+	for i = 1, #LastVar + 1 do
+		LastVar[i] = 1
+	end
+	return string.rep(_ValidCharacters:sub(1, 1), #LastVar)
 end
 
 local function CreateExecutionScope(parent)
@@ -614,8 +645,8 @@ local function CreateExecutionScope(parent)
 		return nil
 	end
 	function scope:MakeLocal(name, newName)
-		if RewriterOptions.ObscureVariableNames and not newName then
-			self.Locals[name] = GenerateRandomString()
+		if (RewriterOptions.ObscureVariableNames or RewriterOptions.MinifyVariableNames) and not newName then
+			self.Locals[name] = GenerateVariableName()
 		else
 			self.Locals[name] = newName or name
 		end
