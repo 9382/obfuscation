@@ -81,7 +81,7 @@ local function CreateExecutionLoop(ast)
 
 	executeExpression = function(expr, scope, SpecialState)
 		local AstType = expr[5]
-		if AstType == 1 then
+		if AstType == 1 then --Function
 			return function(...)
 				local childScope = CreateExecutionScope(scope)
 				local inputArgs = {...}
@@ -111,7 +111,7 @@ local function CreateExecutionLoop(ast)
 				end
 			end
 
-		elseif AstType == 2 then
+		elseif AstType == 2 then --VarExpr
 			if SpecialState then
 				return expr, True
 			else
@@ -121,7 +121,7 @@ local function CreateExecutionLoop(ast)
 				return FunctionEnvironment[expr[0]]
 			end
 
-		elseif AstType == 3 then
+		elseif AstType == 3 then --MemberExpr (Includes IndexExpr)
 			if SpecialState then
 				return expr, True
 			else
@@ -140,7 +140,7 @@ local function CreateExecutionLoop(ast)
 				end
 			end
 
-		elseif AstType == 4 then
+		elseif AstType == 4 then --CallExpr (Includes all short-hand call expressions)
 			local args = {}
 			EvaluateExpressionList(expr[2], args, scope)
 			if expr[3] then --subtle truncation via extra parenthesis
@@ -149,19 +149,19 @@ local function CreateExecutionLoop(ast)
 				return executeExpression(expr[0], scope)(SafeUnpack(args))
 			end
 
-		elseif AstType == 5 then
+		elseif AstType == 5 then --NumberExpr
 			return Tonumber(expr[1][0])
 
-		elseif AstType == 6 then
+		elseif AstType == 6 then --StringExpr
 			return expr[1][0]
 
-		elseif AstType == 7 then
+		elseif AstType == 7 then --NilExpr
 			return Nil
 
-		elseif AstType == 8 then
+		elseif AstType == 8 then --BooleanExpr
 			return expr[1]
 
-		elseif AstType == 9 then
+		elseif AstType == 9 then --DotsExpr
 			-- -1 is the reserved LocalID for local "..."
 			if expr[0] then
 				return scope:GL(-1)[1][1]
@@ -169,7 +169,7 @@ local function CreateExecutionLoop(ast)
 				return SafeUnpack(scope:GL(-1)[1], True)
 			end
 
-		elseif AstType == 10 then
+		elseif AstType == 10 then --ConstructorExpr
 			local out = {}
 			--Process all key'd entries first
 			local unkeyed = {}
@@ -186,7 +186,7 @@ local function CreateExecutionLoop(ast)
 			EvaluateExpressionList(unkeyed, out, scope)
 			return out
 
-		elseif AstType == 11 then
+		elseif AstType == 11 then --UnopExpr
 			local Rhs = executeExpression(expr[0], scope)
 			local op = expr[2]
 			if op == 1 then
@@ -197,7 +197,7 @@ local function CreateExecutionLoop(ast)
 				return #Rhs
 			end
 
-		elseif AstType == 12 then
+		elseif AstType == 12 then --BinopExpr
 			local op = expr[2]
 			local Lhs = executeExpression(expr[1], scope)
 			--The RHS should only be evaluated for and/or if the LHS doesn't complete the condition
@@ -240,7 +240,7 @@ local function CreateExecutionLoop(ast)
 
 	local executeStatement = function(statement, scope)
 		local AstType = statement[5]
-		if AstType == 1 then
+		if AstType == 1 then --Function
 			local name = statement[0]
 			if name[5] == 3 then
 				local Container = executeExpression(name[0], scope)
@@ -262,14 +262,14 @@ local function CreateExecutionLoop(ast)
 				end
 			end
 
-		elseif AstType == 2 then
+		elseif AstType == 2 then --IfStatement
 			for _, Clause in iPairs(statement[0]) do
 				if not Clause[0] or executeExpression(Clause[0], scope) then
 					return executeStatList(Clause[1], CreateExecutionScope(scope))
 				end
 			end
 
-		elseif AstType == 3 then
+		elseif AstType == 3 then --WhileStatement
 			while executeExpression(statement[0], scope) do
 				local ReturnData = executeStatList(statement[1], CreateExecutionScope(scope))
 				if ReturnData then
@@ -281,10 +281,10 @@ local function CreateExecutionLoop(ast)
 				end
 			end
 
-		elseif AstType == 4 then
+		elseif AstType == 4 then --DoStatement
 			return executeStatList(statement[1], CreateExecutionScope(scope))
 
-		elseif AstType == 5 then
+		elseif AstType == 5 then --NumericForStatement
 			local var = Tonumber(executeExpression(statement[0], scope))
 			local limit = Tonumber(executeExpression(statement[2], scope))
 			local step = statement[3] and Tonumber(executeExpression(statement[3], scope)) or 1
@@ -303,7 +303,7 @@ local function CreateExecutionLoop(ast)
 				var = var + step
 			end
 
-		elseif AstType == 6 then
+		elseif AstType == 6 then --GenericForStatement
 			local gen1, gen2, gen3
 			local generators = statement[0]
 			if not generators[2] then
@@ -337,7 +337,7 @@ local function CreateExecutionLoop(ast)
 				end
 			end
 
-		elseif AstType == 7 then
+		elseif AstType == 7 then --ReoeatStatement
 			local subScope = CreateExecutionScope(scope)
 			repeat
 				local ReturnData = executeStatList(statement[1], subScope)
@@ -350,7 +350,7 @@ local function CreateExecutionLoop(ast)
 				end
 			until executeExpression(statement[0], subScope)
 
-		elseif AstType == 8 then
+		elseif AstType == 8 then --LocalStatement
 			local out = {}
 			EvaluateExpressionList(statement[0], out, scope)
 			for i = 1, #statement[1] do
@@ -358,20 +358,20 @@ local function CreateExecutionLoop(ast)
 				scope:ML(l[0], out[i])
 			end
 
-		elseif AstType == 9 then
+		elseif AstType == 9 then --ReturnStatement
 			local arguments = {}
 			EvaluateExpressionList(statement[2], arguments, scope)
 			return arguments
 
-		elseif AstType == 10 then
+		elseif AstType == 10 then --BreakStatement
 			return True --This just works, ok?
 
-		elseif AstType == 11 then
+		elseif AstType == 11 then --ContinueStatement
 			return False --This too
 
-		elseif AstType == 12 then
+		elseif AstType == 12 then --AssignmentStatement
 			local FinalRhs
-			local function ShouldFullyEvaluate(i)
+			local function HandleTruncation(i)
 				if i >= #statement[0] then
 					if FinalRhs == nil then
 						FinalRhs = {executeExpression(statement[0][#statement[0]], scope)}
@@ -386,21 +386,21 @@ local function CreateExecutionLoop(ast)
 				if wasExprExit then
 					if Lhs[5] == 2 then
 						if Lhs[2] then
-							scope:SL(Lhs[0], ShouldFullyEvaluate(i))
+							scope:SL(Lhs[0], HandleTruncation(i))
 						else
-							FunctionEnvironment[Lhs[0]] = ShouldFullyEvaluate(i)
+							FunctionEnvironment[Lhs[0]] = HandleTruncation(i)
 						end
 
 					else--if Lhs[5] == 3 then
 						local Container = executeExpression(Lhs[0], scope)
-						Container[executeExpression(Lhs[1], scope)] = ShouldFullyEvaluate(i)
+						Container[executeExpression(Lhs[1], scope)] = HandleTruncation(i)
 
 					--It will always be one of the above types. If it's not, thats a serializer error
 					end
 				end
 			end
 
-		elseif AstType == 13 then
+		elseif AstType == 13 then --CallStatement
 			executeExpression(statement[0], scope)
 
 		end
