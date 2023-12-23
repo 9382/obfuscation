@@ -2173,42 +2173,35 @@ end
 We can write junk statements in any formatting style we want
 since we use ParseLua to make it into reliable AST data
 --]]
-local JunkVars = {}
-for i = 1,25 do
-	JunkVars[i] = GenerateRandomString()
-end
-local function GetJunkVar()
-	return JunkVars[math.random(1,#JunkVars)]
-end
 local JunkStatements = {
 	function()
-		local var = GetJunkVar()
+		local var = GenerateRandomString()
 		return "if " .. var .. " then " .. var .. "() end"
 	end,
 	function()
-		return "local " .. GetJunkVar()
+		return "local " .. GenerateRandomString()
 	end,
 	function()
-		local arg = GetJunkVar()
-		return "local function " .. GetJunkVar() .. "("..arg..",...) return "..arg.."(...) end"
+		local arg = GenerateRandomString()
+		return "local function " .. GenerateRandomString() .. "("..arg..",...) return "..arg.."(...) end"
 	end,
 	function()
-		local arg = GetJunkVar()
-		local f1 = GetJunkVar()
-		local f2 = GetJunkVar()
-		return "local function "..GetJunkVar().."("..arg..") local "..arg.."="..arg.." return "..f1.."("..arg..") or "..f2.."("..arg..") end"
+		local arg = GenerateRandomString()
+		local f1 = GenerateRandomString()
+		local f2 = GenerateRandomString()
+		return "local function "..GenerateRandomString().."("..arg..") local "..arg.."="..arg.." return "..f1.."("..arg..") or "..f2.."("..arg..") end"
 	end,
 	function()
-		return "local " .. GetJunkVar() .. " = " .. math.random(-10,10)
+		return "local " .. GenerateRandomString() .. " = " .. math.random(-10,10)
 	end,
 	function()
-		return "local " .. GetJunkVar() .. " = \"\""
+		return "local " .. GenerateRandomString() .. " = \"\""
 	end,
 	function()
-		return "local " .. GetJunkVar() .. " = {}"
+		return "local " .. GenerateRandomString() .. " = {}"
 	end,
 	function()
-		local var = GetJunkVar()
+		local var = GenerateRandomString()
 		return "while " .. var .. " do " .. var .. " = " .. var .. "() end"
 	end
 }
