@@ -918,13 +918,13 @@ local function WriteStatement(Statement, Scope)
 		return CompileWithFormattingData(Lines)
 
 	elseif Statement.AstType == "LocalStatement" then
-		local NewLocals = {}
-		for i,Local in ipairs(Statement.LocalList) do
-			NewLocals[i] = Scope:MakeLocal(Local.Name)
-		end
 		local NewValues = {}
 		for i,Value in ipairs(Statement.InitList) do
 			NewValues[i] = WriteExpression(Value, Scope)
+		end
+		local NewLocals = {}
+		for i,Local in ipairs(Statement.LocalList) do
+			NewLocals[i] = Scope:MakeLocal(Local.Name)
 		end
 		if #NewValues > 0 then
 			return "local " .. table.concat(NewLocals, CommaSplitter) .. EqualsSplitter .. table.concat(NewValues, CommaSplitter)
