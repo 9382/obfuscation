@@ -52,7 +52,12 @@ local RewriterOptions = {
 
 	--== JunkCodeChance ==--
 	-- The chance at each statement that junk code is added if enabled
-	JunkCodeChance = 3/3,
+	JunkCodeChance = 1/4,
+
+	--== AllowNestedJunkCode ==--
+	-- Whether or not Junk code should be generated inside junk code
+	-- If this is enabled and JunkCodeChance is high, the script will fail due to exponentially increasing junk
+	AllowNestedJunkCode = true,
 
 	--== PerformCodeFlattening ==--
 	-- Performs code flattening to help obscure the normal flow of the function
@@ -968,7 +973,7 @@ since we use ParseLua to make it into reliable AST data
 local JunkStatements = {
 	function()
 		local var = GenerateRandomString()
-		return "if " .. var .. " then " .. var .. "() end"
+		return "local " .. var .. "; if " .. var .. " then " .. var .. "() end"
 	end,
 	function()
 		return "local " .. GenerateRandomString()
@@ -981,7 +986,7 @@ local JunkStatements = {
 		local arg = GenerateRandomString()
 		local f1 = GenerateRandomString()
 		local f2 = GenerateRandomString()
-		return "local function "..GenerateRandomString().."("..arg..") local "..arg.."="..arg.." return "..f1.."("..arg..") or "..f2.."("..arg..") end"
+		return "local function "..GenerateRandomString().."("..arg..", "..f1..", "..f2..") local "..arg.."="..arg.." return "..f1.."("..arg..") or "..f2.."("..arg..") end"
 	end,
 	function()
 		return "local " .. GenerateRandomString() .. " = " .. math.random(-10,10)
@@ -994,11 +999,12 @@ local JunkStatements = {
 	end,
 	function()
 		local var = GenerateRandomString()
-		return "while " .. var .. " do " .. var .. " = " .. var .. "() end"
+		return "local " .. var .. " = function() end; while " .. var .. " do " .. var .. " = " .. var .. "() end"
 	end
 }
 local function GenerateJunkCode()
 	local s,r = ParseLua(JunkStatements[math.random(1,#JunkStatements)]())
+	r.Body[1].IsJunk = true
 	return r.Body[1]
 end
 
@@ -1024,12 +1030,6 @@ end
 WriteStatList = function(StatList, Scope, DontIndent)
 	local out = {}
 	for _,Statement in ipairs(StatList.Body) do
-		if RewriterOptions.AddJunkCode and math.random() < RewriterOptions.JunkCodeChance then
-			local JunkText = StringSplit(WriteStatement(GenerateJunkCode(), Scope) .. ConsiderSemicolon(), "\n")
-			for i = 1,#JunkText do
-				out[#out+1] = JunkText[i]
-			end
-		end
 		local StatementText = StringSplit(WriteStatement(Statement, Scope) .. ConsiderSemicolon(), "\n")
 		for i = 1,#StatementText do
 			out[#out+1] = StatementText[i]
@@ -1043,6 +1043,32 @@ WriteStatList = function(StatList, Scope, DontIndent)
 	return out
 end
 
+local function InsertJunkCode(TableObj, blacklist)
+	blacklist = blacklist or {}
+	if blacklist[TableObj] then
+		return
+	end
+	blacklist[TableObj] = true
+	if TableObj.AstType == "Statlist" then
+		TableObj = TableObj.Body
+		local LastStatement = TableObj[#TableObj].AstType
+		local IterationStart = #TableObj+1
+		if LastStatement == "ReturnStatement" or LastStatement == "BreakStatement" or LastStatement == "ContinueStatement" then
+			IterationStart = #TableObj --else, we may produce non-compiling code
+		end
+		for i = IterationStart, 1, -1 do
+			if math.random() < RewriterOptions.JunkCodeChance then
+				table.insert(TableObj, i, GenerateJunkCode())
+			end
+		end
+	end
+	for a,b in next,TableObj do
+		if type(b) == "table" and (RewriterOptions.AllowNestedJunkCode or not b.IsJunk) then
+			InsertJunkCode(b, blacklist)
+		end
+	end
+end
+
 print((function(C)
 	local s,p = ParseLua(C)
 	if not s then
@@ -1052,6 +1078,10 @@ print((function(C)
 
 	if not RewriterOptions.UseNewlines and not RewriterOptions.UseSemicolons then
 		print("WARNING: Semicolons should really be used when no newlines are present")
+	end
+
+	if RewriterOptions.AddJunkCode then
+		InsertJunkCode(p)
 	end
 
 	if RewriterOptions.PerformCodeFlattening then
