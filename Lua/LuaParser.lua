@@ -75,6 +75,11 @@ local Keywords = lookupify{
 		'return', 'then', 'true', 'until', 'while',
 };
 
+local BackslashEscaping = {
+	a="\a", b="\b", f="\f", n="\n", r="\r", t="\t", v="\v",
+	["\\"]="\\", ['"']='"', ["'"]="'", ["["]="[", ["]"]="]"
+}
+
 local function LexLua(src)
 	--token dump
 	local tokens = {}
@@ -250,23 +255,48 @@ local function LexLua(src)
 				toEmit = {Type = 'Number', Data = src:sub(start, p-1)}
 
 			elseif c == '\'' or c == '\"' then
-				local start = p
 				--string const
 				local delim = get()
+				local parsedString = ""
 				local contentStart = p
 				while true do
 					local c = get()
 					if c == '\\' then
-						get() --get the escape char
+						local next = get()
+						local replacement = BackslashEscaping[next]
+						if replacement then
+							parsedString = parsedString .. replacement
+						else
+							if next == "x" then -- Some versions of lua don't respect this, others do. It's a bit weird, but we support it here
+								local n1 = get()
+								if n1 == "" or n1 == delim or not HexDigits[n1] then
+									generateError("invalid escape sequence near '"..delim.."'")
+								end
+								local n2 = get()
+								if n2 == "" or n2 == delim or not HexDigits[n2] then
+									generateError("invalid escape sequence near '"..delim.."'")
+								end
+								parsedString = parsedString .. string.char(tonumber(n1 .. n2, 16))
+							elseif Digits[next] then
+								local num = next
+								while #num < 3 and Digits[peek()] do
+									num = num .. get()
+								end
+								parsedString = parsedString .. string.char(tonumber(num))
+							else
+								generateError("invalid escape sequence near '"..delim.."'") -- Same here - some versions see this as an error, others just ignore the \ and move on
+							end
+						end
 					elseif c == delim then
 						break
 					elseif c == '' then
 						generateError("Unfinished string near <eof>")
+					else
+						parsedString = parsedString .. c
 					end
 				end
-				local content = src:sub(contentStart, p-2)
-				local constant = src:sub(start, p-1)
-				toEmit = {Type = 'String', Data = constant, Constant = content}
+				local standardContent = src:sub(contentStart, p-2)
+				toEmit = {Type = 'String', Data = delim .. standardContent .. delim, Constant = standardContent, Parsed = parsedString}
 
 			elseif c == '[' then
 				local content, wholetext = tryGetLongString()

@@ -1,4 +1,4 @@
-local ParseLua = require("LuaParser")
+local ParseLua = require("./LuaParser")
 
 --== BEGIN REWRITER ==--
 
