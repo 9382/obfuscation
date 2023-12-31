@@ -1,10 +1,4 @@
-
---
--- Minify.lua
---
--- A compilation of all of the neccesary code to Minify a source file, all into one single
--- script for usage on Roblox. Needed to deal with Roblox' lack of `require`.
---
+-- This is a slightly modified version of Minify.lua from https://github.com/stravant/LuaMinify
 
 local function lookupify(tb)
 	for _, v in pairs(tb) do
@@ -465,29 +459,16 @@ local function ParseLua(src)
 		'J', 'K', 'L', 'M', 'N', 'O', 'P', 'Q', 'R', 
 		'S', 'T', 'U', 'V', 'W', 'X', 'Y', 'Z'
 	}
-	local function CreateScope(parent)
+	local function CreateScope(parent, canBreak)
 		local scope = {}
+		if canBreak ~= nil then
+			scope.CanBreak = canBreak
+		else
+			scope.CanBreak = parent.CanBreak
+		end
 		scope.Parent = parent
 		scope.LocalList = {}
 		scope.LocalMap = {}
-		function scope:RenameVars()
-			for _, var in pairs(scope.LocalList) do
-				local id;
-				VarUid = 0
-				repeat
-					VarUid = VarUid + 1
-					local varToUse = VarUid
-					id = ''
-					while varToUse > 0 do
-						local d = varToUse % #VarDigits
-						varToUse = (varToUse - d) / #VarDigits
-						id = id..VarDigits[d+1]
-					end
-				until not GlobalVarGetMap[id] and not parent:GetLocal(id) and not scope.LocalMap[id] and not Keywords[id]
-				var.Name = id
-				scope.LocalMap[id] = var
-			end
-		end
 		function scope:GetLocal(name)
 			--first, try to get my variable 
 			local my = scope.LocalMap[name]
@@ -522,7 +503,7 @@ local function ParseLua(src)
 	local ParseStatementList;
 
 	local function ParseFunctionArgsAndBody(scope)
-		local funcScope = CreateScope(scope)
+		local funcScope = CreateScope(scope, false)
 		if not tok:ConsumeSymbol('(') then
 			return false, GenerateError("`(` expected.")
 		end
@@ -929,7 +910,7 @@ local function ParseLua(src)
 			end
 
 			--body
-			local st, nodeBody = ParseStatementList(scope)
+			local st, nodeBody = ParseStatementList(scope, true)
 			if not st then return false, nodeBody end
 
 			--end
@@ -963,7 +944,7 @@ local function ParseLua(src)
 			local baseVarName = tok:Get()
 			if tok:ConsumeSymbol('=') then
 				--numeric for
-				local forScope = CreateScope(scope)
+				local forScope = CreateScope(scope, true)
 				local forVar = forScope:CreateLocal(baseVarName.Data)
 				--
 				local st, startEx = ParseExpr(scope)
@@ -999,7 +980,7 @@ local function ParseLua(src)
 				stat = nodeFor
 			else
 				--generic for
-				local forScope = CreateScope(scope)
+				local forScope = CreateScope(scope, true)
 				--
 				local varList = {forScope:CreateLocal(baseVarName.Data)}
 				while tok:ConsumeSymbol(',') do
@@ -1039,7 +1020,7 @@ local function ParseLua(src)
 			end
 
 		elseif tok:ConsumeKeyword('repeat') then
-			local st, body = ParseStatementList(scope)
+			local st, body = ParseStatementList(scope, true)
 			if not st then return false, body end
 			--
 			if not tok:ConsumeKeyword('until') then
@@ -1143,11 +1124,17 @@ local function ParseLua(src)
 			stat = nodeReturn
 
 		elseif tok:ConsumeKeyword('break') then
+			if not scope.CanBreak then
+				return false, GenerateError("Can not break a non-looping statement")
+			end
 			local nodeBreak = {}
 			nodeBreak.AstType = 'BreakStatement'
 			stat = nodeBreak
 
 		elseif tok:ConsumeKeyword('continue') then
+			if not scope.CanBreak then
+				return false, GenerateError("Can not continue a non-looping statement")
+			end
 			local nodeBreak = {}
 			nodeBreak.AstType = 'ContinueStatement'
 			stat = nodeBreak
@@ -1215,9 +1202,9 @@ local function ParseLua(src)
 
 
 	local statListCloseKeywords = lookupify{'end', 'else', 'elseif', 'until'}
-	ParseStatementList = function(scope)
+	ParseStatementList = function(scope, canBreak)
 		local nodeStatlist = {}
-		nodeStatlist.Scope = CreateScope(scope)
+		nodeStatlist.Scope = CreateScope(scope, canBreak)
 		nodeStatlist.AstType = 'Statlist'
 		--
 		local stats = {}
@@ -1234,7 +1221,7 @@ local function ParseLua(src)
 
 
 	local function mainfunc()
-		local topScope = CreateScope()
+		local topScope = CreateScope(nil, false)
 		return ParseStatementList(topScope)
 	end
 
