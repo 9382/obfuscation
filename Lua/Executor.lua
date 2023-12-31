@@ -1,3 +1,6 @@
+-- This script is the executor, which executes lua code turned into a serialized ("obfuscated") string by Serializer.lua
+-- ExecutorMinified.lua is an alternative form of the executor made using luamin
+
 local function CreateExecutionLoop(ast)
 
 	local stringsub,  stringbyte,  stringrep,  stringchar

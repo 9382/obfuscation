@@ -2,6 +2,9 @@ local ParseLua = require("./LuaParser")
 
 --== BEGIN REWRITER ==--
 
+-- This script is a lua code rewriter. Change the options in RewriterOptions for different outputs
+-- The lua code to be rewritten goes at the very bottom (TODO: force a use-by-require)
+
 local _seed = os.time()
 math.randomseed(_seed)
 print("Using seed", _seed)
@@ -1103,6 +1106,14 @@ return function(C)
 
 	if not RewriterOptions.UseNewlines and not RewriterOptions.UseSemicolons then
 		print("WARNING: Semicolons should really be used when no newlines are present")
+	end
+
+	if RewriterOptions.AddJunkCode then
+		InsertJunkCode(p)
+	end
+
+	if RewriterOptions.PerformCodeFlattening then
+		FlattenControlFlow(p)
 	end
 
 	local result = WriteStatList(p, CreateExecutionScope(), true)

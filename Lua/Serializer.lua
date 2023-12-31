@@ -1,5 +1,8 @@
 local ParseLua = require("./LuaParser")
 
+-- This script is the serializer used to turn lua code into a string that can be decoded by Executor.lua
+-- The code to be serialized goes at the very bottom
+
 local _seed = os.time()
 math.randomseed(_seed)
 print("Using seed", _seed)
@@ -456,9 +459,7 @@ print((function(C)
 		return false,p
 	end
 
-	-- print(PrintTable(p))
 	deepModify(p.Body, true)
-	-- print(PrintTable(p.Body))
 	return true, serializer(p.Body)
 end)([====[
 ]====]))
@@ -472,6 +473,5 @@ return function(C)
 	end
 
 	deepModify(p.Body, true)
-	-- print(PrintTable(p.Body))
 	return true, serializer(p.Body)
 end
