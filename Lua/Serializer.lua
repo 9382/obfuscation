@@ -453,7 +453,7 @@ end
 
 --[[ quick in-script way of testing
 print((function(C)
-  local s,p = ParseLua(C)
+	local s,p = ParseLua(C)
 	if not s then
 		print("Failed to parse the lua - "..p)
 		return false,p
