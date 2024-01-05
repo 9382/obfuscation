@@ -442,8 +442,8 @@ local function deepModify(t, firstCall)
 		if type(b) == "table" and not checked[b] then
 			checked[b] = true
 			if b.AstType == "Statlist" then
-				deepModify(b)
-				t[a] = b[1]
+				deepModify(b.Body)
+				t[a] = b.Body
 			else
 				deepModify(b)
 			end
@@ -460,7 +460,10 @@ print((function(C)
 	end
 
 	deepModify(p.Body, true)
-	return true, serializer(p.Body)
+	local output = serializer(p.Body)
+
+	io.open("Serializer output.lua", "w+"):write(output)
+	return true, output
 end)([====[
 ]====]))
 --]]
