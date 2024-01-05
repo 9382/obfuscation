@@ -1054,7 +1054,7 @@ local function InsertJunkCode(TableObj, blacklist)
 	blacklist[TableObj] = true
 	if TableObj.AstType == "Statlist" then
 		TableObj = TableObj.Body
-		local LastStatement = TableObj[#TableObj].AstType
+		local LastStatement = #TableObj > 0 and TableObj[#TableObj].AstType
 		local IterationStart = #TableObj+1
 		if LastStatement == "ReturnStatement" or LastStatement == "BreakStatement" or LastStatement == "ContinueStatement" then
 			IterationStart = #TableObj --else, we may produce non-compiling code
