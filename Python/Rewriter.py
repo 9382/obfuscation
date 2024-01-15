@@ -585,7 +585,10 @@ def CreateExecutionLoop(code):
 			value = ExecuteExpression(statement.value, scope)
 			if OPTION_add_useless_annotations:
 				if len(statement.targets) == 1 and type(t := statement.targets[0]) in [ast.Name, ast.Attribute, ast.Subscript]:
-					target = ExecuteExpression(t, scope) + ": " + random.choice(AnnotationTypes)
+					if type(t) == ast.Name and (t.id in scope.NonLocals or t.id in scope.Globals): # Can't annotate a nonlocal/global because idk
+						target = ExecuteExpression(t, scope)
+					else:
+						target = ExecuteExpression(t, scope) + ": " + random.choice(AnnotationTypes)
 					return f"{target} = {value}"
 			target = " = ".join([ExecuteExpression(t, scope) for t in statement.targets])
 			return f"{target} = {value}"
