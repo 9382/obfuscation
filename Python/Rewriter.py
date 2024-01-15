@@ -362,7 +362,8 @@ def CreateExecutionLoop(code):
 		if exprType == ast.Constant:
 			if type(expr.value) == str:
 				if OPTION_obscure_strings:
-					return "str().join(chr(x) for x in [" + ",".join(str(ord(x)) for x in expr.value) + "])"
+					JoinVar = GenerateSmallestStr()
+					return f"str().join(chr({JoinVar}) for {JoinVar} in [" + ",".join(str(ord(x)) for x in expr.value) + "])"
 				if ShouldWrap:
 					out = WrapInQuotes(expr.value).replace("\n","\\n").replace("\0", "\\0")
 					if OPTION_insert_junk:
