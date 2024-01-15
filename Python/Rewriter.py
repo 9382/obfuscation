@@ -157,8 +157,6 @@ def CreateExecutionLoop(code):
 					return self.Parent.getVar(var, getFromCore=True)
 				else:
 					return self.createVar(var)
-			if self.scopeType == "class" and not fromChild and var not in self.NonLocals and var not in self.Globals:
-				return var, True
 			if var in self.VarMapping:
 				return self.VarMapping[var], True
 			if self.Parent:
