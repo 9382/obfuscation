@@ -480,22 +480,24 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 		CollectedInstructions[#CollectedInstructions+1] = table.remove(ToShuffle, math.random(1, #ToShuffle))
 	end
 
+	local MaxInstructionN = #CollectedInstructions
+
 	--Wrap it up
 	NewAST[2] = {
 		AstType = "WhileStatement",
 		Condition = {
 			AstType = "BinopExpr",
 			Op = "<=",
-			Rhs = {AstType="NumberExpr", Value={Data=tostring(#CollectedInstructions)}},
+			Rhs = {AstType="NumberExpr", Value={Data=tostring(MaxInstructionN)}},
 			Lhs = InstructionExpression,
 		},
 		Body = {
 			AstType = "Statlist",
 			Scope = BodyScope,
-			Body = {{
+			Body = {MaxInstructionN > 0 and {
 				AstType = "IfStatement",
 				Clauses = CollectedInstructions
-			}}
+			} or nil}
 		}
 	}
 
