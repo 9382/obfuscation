@@ -1,3 +1,5 @@
+local RewriterOptions
+
 --[[ Control Flow Flattener
 Flattens the control into a straight-line format, with each statement being split up
 
@@ -100,9 +102,9 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 						v.DedicatedFinish = {AstType="VarExpr", Name=FinishName, Local={CanRename=true, Scope=v.Body.Scope, Name=FinishName}}
 						v.DedicatedStep = {AstType="VarExpr", Name=StepName, Local={CanRename=true, Scope=v.Body.Scope, Name=StepName}}
 					elseif v.AstType == "GenericForStatement" then
-						local KeyName = "_key__dedicated"--v.VariableList[1].Name.."__dedicated"
-						local GenName = "_gen__dedicated"--__"..math.random(1e4,1e5-1)
-						local ObjName = "_obj__dedicated"--__"..math.random(1e4,1e5-1)
+						local KeyName = "_key__dedicated"
+						local GenName = "_gen__dedicated"
+						local ObjName = "_obj__dedicated"
 						v.DedicatedKey = {AstType="VarExpr", Name=KeyName, Local={CanRename=true, Scope=v.Body.Scope, Name=KeyName}}
 						v.DedicatedGenerator = {AstType="VarExpr", Name=GenName, Local={CanRename=true, Scope=v.Body.Scope, Name=GenName}}
 						v.DedicatedObject = {AstType="VarExpr", Name=ObjName, Local={CanRename=true, Scope=v.Body.Scope, Name=ObjName}}
@@ -134,8 +136,8 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 		if not SeenVariables[Variable] then
 			VariableObjects[#VariableObjects+1] = {CanRename=true, Scope=BodyScope, Name=Variable}
 			SeenVariables[Variable] = true
-		else
-			print("WARNING: Double-definition of local " .. Variable .. " found during flattening - no guarantee of expected behaviour")
+		elseif not Variable:find("^_%w+__dedicated") then
+			print("WARNING: Repeat definition of local " .. Variable .. " found during flattening - no guarantee of expected behaviour")
 		end
 	end
 	NewAST[1] = {
@@ -201,7 +203,7 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 			if type(v) == "table" and k ~= "Scope" and not blacklist[v] then
 				if v.AstType == "AssignmentStatement" and v.Lhs[1] == InstructionExpression then
 					local Value = v.Rhs[1].Value
-					if not old or Value.Data == tostring(old) then
+					if Value.Data == tostring(old) then
 						Value.Data = tostring(new)
 					end
 				else
@@ -505,4 +507,7 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 	return NewAST
 end
 
-return PerformFlattening
+return function(TableObj, Options)
+	RewriterOptions = Options
+	return PerformFlattening(TableObj)
+end
