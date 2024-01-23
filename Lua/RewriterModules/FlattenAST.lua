@@ -32,7 +32,6 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 	local Variables = {}
 	local InstructionPointer = "__ins" .. math.random(1e4,1e5-1) .. "__"
 	local InstructionExpression = {AstType="VarExpr", Name=InstructionPointer, Local={CanRename=true, Scope=BodyScope, Name=InstructionPointer}}
-	Variables[1] = InstructionPointer
 	local ScopeChain = {BodyScope}
 	local function GetNewVariable(VarName)
 		return VarName .. "__ver_" .. FunctionDepth .. "_" .. #ScopeChain
@@ -51,7 +50,7 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 							local NewName = GetNewVariable(Name.Name)
 							Name.TrueName = Name.Name
 							Name.Name = NewName
-							Variables[#Variables+1] = NewName
+							Variables[#Variables+1] = Name
 						end
 					elseif v.Name then --Potentially a member expression or something, give it a check
 						DeepScan(v.Name, IsPreDefined, blacklist)
@@ -64,7 +63,7 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 							v.Local.TrueName = v.Local.Name
 							v.Local.Name = NewName
 							v.Name = NewName --not required since rewriter only uses local name but its good practice
-							Variables[#Variables+1] = NewName
+							Variables[#Variables+1] = v.Local
 						end
 						v.TrueName = v.Local.TrueName
 						v.Name = v.Local.Name --Don't declare new variable scope if its just another occurance, that gets indicated by new lcoal
@@ -75,7 +74,7 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 							local NewName = GetNewVariable(Local.Name)
 							Local.TrueName = Local.Name
 							Local.Name = NewName
-							Variables[#Variables+1] = NewName
+							Variables[#Variables+1] = Local
 						end
 					end
 					DeepScan(v.InitList, IsPreDefined, blacklist)
@@ -117,7 +116,7 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 						v.TrueName = v.Name
 						v.Name = NewName
 						if not IsPreDefined then
-							Variables[#Variables+1] = NewName
+							Variables[#Variables+1] = v
 						end
 					end
 				else
@@ -131,13 +130,14 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 	end
 	DeepScan(Body)
 	local SeenVariables = {}
-	local VariableObjects = {}
+	local VariableObjects = {InstructionExpression.Local}
 	for i,Variable in next,Variables do
 		if not SeenVariables[Variable] then
-			VariableObjects[#VariableObjects+1] = {CanRename=true, Scope=BodyScope, Name=Variable}
+			VariableObjects[#VariableObjects+1] = Variable
 			SeenVariables[Variable] = true
 		end
 	end
+	BodyScope.LocalsInOrder = VariableObjects
 	NewAST[1] = {
 		AstType = "LocalStatement",
 		LocalList = VariableObjects,
@@ -220,7 +220,7 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 				Statement.AstType = "AssignmentStatement"
 				Statement.Lhs = Statement.LocalList
 				for i,Lhs in ipairs(Statement.Lhs) do
-					Statement.Lhs[i] = {AstType="VarExpr", Name=Lhs.Name, Local={CanRename=true, Scope=BodyScope, Name=Lhs.Name}}
+					Statement.Lhs[i] = {AstType="VarExpr", Name=Lhs.Name, Local=Lhs}
 				end
 				Statement.Rhs = Statement.InitList
 				if #Statement.Rhs == 0 then
@@ -232,10 +232,10 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 
 			elseif Statement.AstType == "Function" and Statement.IsLocal then
 				Statement.IsLocal = false
-				local FuncName = Statement.Name.Name
+				local FuncName = Statement.Name
 				CollectedInstructions[index] = StandardProcedure({
 					AstType = "AssignmentStatement",
-					Lhs = {{AstType="VarExpr", Name=FuncName, Local={CanRename=true, Scope=BodyScope, name=FuncName}}},
+					Lhs = {{AstType="VarExpr", Name=FuncName.Name, Local=FuncName}},
 					Rhs = {Statement},
 				}, index)
 

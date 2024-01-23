@@ -64,31 +64,6 @@ local function GenerateVariableName()
 	return string.rep(_ValidCharacters:sub(1, 1), #LastVar)
 end
 
-local function CreateExecutionScope(parent)
-	local scope = {Parent=parent, Locals={}}
-	function scope:GetLocal(name)
-		local my = self.Locals[name]
-		if my then return my end
-
-		if self.Parent then
-			local par = self.Parent:GetLocal(name)
-			if par then return par end
-		end
-
-		error("GetLocal fail?? " .. tostring(name))
-		return nil
-	end
-	function scope:MakeLocal(name, newName)
-		if (RewriterOptions.ObscureVariableNames or RewriterOptions.MinifyVariableNames) and not newName then
-			self.Locals[name] = GenerateVariableName()
-		else
-			self.Locals[name] = newName or name
-		end
-		return self.Locals[name]
-	end
-	return scope
-end
-
 local function CompileWithFormattingData(Lines)
 	if RewriterOptions.UseNewlines then
 		return table.concat(Lines,"\n")
@@ -101,16 +76,15 @@ local WriteStatList
 local function WriteExpression(Expression, Scope)
 	Expression.ParenCount = Expression.ParenCount or 0
 	if Expression.AstType == "Function" then
-		local SubScope = CreateExecutionScope(Scope)
 		local NewArguments = {}
 		for i,Argument in ipairs(Expression.Arguments) do
-			NewArguments[i] = SubScope:MakeLocal(Argument.Name)
+			NewArguments[i] = Expression.Arguments[i].Name
 		end
 		if Expression.VarArg then
 			NewArguments[#NewArguments+1] = "..."
 		end
 		local Lines = {"function(" .. table.concat(NewArguments, CommaSplitter) .. ")"}
-		local Body = WriteStatList(Expression.Body, SubScope)
+		local Body = WriteStatList(Expression.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
@@ -119,7 +93,7 @@ local function WriteExpression(Expression, Scope)
 
 	elseif Expression.AstType == "VarExpr" then
 		if Expression.Local then
-			return Scope:GetLocal(Expression.Name)
+			return Expression.Local.Name
 		else
 			return Expression.Name
 		end
@@ -241,20 +215,19 @@ local function WriteStatement(Statement, Scope)
 	if Statement.AstType == "Function" then
 		local start
 		if Statement.IsLocal then
-			start = "local function " .. Scope:MakeLocal(Statement.Name.Name)
+			start = "local function " .. Statement.Name.Name
 		else
 			start = "function " .. WriteExpression(Statement.Name, Scope)
 		end
-		local SubScope = CreateExecutionScope(Scope)
 		local NewArguments = {}
 		for i,Argument in ipairs(Statement.Arguments) do
-			NewArguments[i] = SubScope:MakeLocal(Argument.Name)
+			NewArguments[i] = Argument.Name
 		end
 		if Statement.VarArg then
 			NewArguments[#NewArguments+1] = "..."
 		end
 		local Lines = {start .. "(" .. table.concat(NewArguments, CommaSplitter) .. ")"}
-		local Body = WriteStatList(Statement.Body, SubScope)
+		local Body = WriteStatList(Statement.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
@@ -271,8 +244,7 @@ local function WriteStatement(Statement, Scope)
 			else
 				Lines[#Lines+1] = "else"
 			end
-			local SubScope = CreateExecutionScope(Scope)
-			local Body = WriteStatList(Clause.Body, SubScope)
+			local Body = WriteStatList(Clause.Body)
 			for i = 1,#Body do
 				Lines[#Lines+1] = Body[i]
 			end
@@ -282,8 +254,7 @@ local function WriteStatement(Statement, Scope)
 
 	elseif Statement.AstType == "WhileStatement" then
 		local Lines = {"while " .. WriteExpression(Statement.Condition, Scope) .. " do"}
-		local SubScope = CreateExecutionScope(Scope)
-		local Body = WriteStatList(Statement.Body, SubScope)
+		local Body = WriteStatList(Statement.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
@@ -292,8 +263,7 @@ local function WriteStatement(Statement, Scope)
 
 	elseif Statement.AstType == "DoStatement" then
 		local Lines = {"do"}
-		local SubScope = CreateExecutionScope(Scope)
-		local Body = WriteStatList(Statement.Body, SubScope)
+		local Body = WriteStatList(Statement.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
@@ -301,13 +271,12 @@ local function WriteStatement(Statement, Scope)
 		return CompileWithFormattingData(Lines)
 
 	elseif Statement.AstType == "NumericForStatement" then
-		local SubScope = CreateExecutionScope(Scope)
-		local Variable = SubScope:MakeLocal(Statement.Variable.Name)
+		local Variable = Statement.Variable.Name
 		local Start = WriteExpression(Statement.Start, Scope)
 		local End = WriteExpression(Statement.End, Scope)
 		local Elements = {Start, End, Statement.Step and WriteExpression(Statement.Step, Scope)}
 		local Lines = {"for " .. Variable .. EqualsSplitter .. table.concat(Elements, CommaSplitter) .. " do"}
-		local Body = WriteStatList(Statement.Body, SubScope)
+		local Body = WriteStatList(Statement.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
@@ -315,17 +284,16 @@ local function WriteStatement(Statement, Scope)
 		return CompileWithFormattingData(Lines)
 
 	elseif Statement.AstType == "GenericForStatement" then
-		local SubScope = CreateExecutionScope(Scope)
 		local NewVariables = {}
 		for i,Variable in ipairs(Statement.VariableList) do
-			NewVariables[i] = SubScope:MakeLocal(Variable.Name)
+			NewVariables[i] = Variable.Name
 		end
 		local NewGenerators = {}
 		for i,Generator in ipairs(Statement.Generators) do
 			NewGenerators[i] = WriteExpression(Generator, Scope)
 		end
 		local Lines = {"for " .. table.concat(NewVariables, CommaSplitter) .. " in " .. table.concat(NewGenerators, CommaSplitter) .. " do"}
-		local Body = WriteStatList(Statement.Body, SubScope)
+		local Body = WriteStatList(Statement.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
@@ -334,8 +302,7 @@ local function WriteStatement(Statement, Scope)
 
 	elseif Statement.AstType == "RepeatStatement" then
 		local Lines = {"repeat"}
-		local SubScope = CreateExecutionScope(Scope)
-		local Body = WriteStatList(Statement.Body, SubScope)
+		local Body = WriteStatList(Statement.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
@@ -349,7 +316,7 @@ local function WriteStatement(Statement, Scope)
 		end
 		local NewLocals = {}
 		for i,Local in ipairs(Statement.LocalList) do
-			NewLocals[i] = Scope:MakeLocal(Local.Name)
+			NewLocals[i] = Local.Name
 		end
 		if #NewValues > 0 then
 			return "local " .. table.concat(NewLocals, CommaSplitter) .. EqualsSplitter .. table.concat(NewValues, CommaSplitter)
@@ -410,7 +377,8 @@ local function StringSplit(str, splitter)
 end
 
 --cringe string split magic but its needed, trust
-WriteStatList = function(StatList, Scope, DontIndent)
+WriteStatList = function(StatList, DontIndent)
+	local Scope = StatList.Body.Scope
 	local out = {}
 	for _,Statement in ipairs(StatList.Body) do
 		local StatementText = StringSplit(WriteStatement(Statement, Scope) .. ConsiderSemicolon(), "\n")
@@ -426,9 +394,25 @@ WriteStatList = function(StatList, Scope, DontIndent)
 	return out
 end
 
+local function RenameScopeVariables(Scope)
+	for i,Local in next,Scope.LocalsInOrder do
+		if Local.CanRename then
+			Local.Name = GenerateVariableName(Local.Name)
+			Local.CanRename = false --shouldn't have to do this but flattener is trying to fight me
+			--theres a potential that LocalStatement/Function special handling is double-defining locals
+		end
+	end
+	for _,child in next,Scope.Children do
+		RenameScopeVariables(child)
+	end
+end
+
 return function(AST, Options)
 	RewriterOptions = Options
 	CommaSplitter = (RewriterOptions.AddExtraSpacing and ", " or ",")
 	EqualsSplitter = (RewriterOptions.AddExtraSpacing and " = " or "=")
-	return WriteStatList(AST, CreateExecutionScope(), true)
+	if RewriterOptions.ObscureVariableNames or RewriterOptions.MinifyVariableNames then
+		RenameScopeVariables(AST.Scope)
+	end
+	return WriteStatList(AST, true)
 end

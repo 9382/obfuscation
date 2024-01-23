@@ -496,8 +496,13 @@ local function ParseLua(src)
 		else
 			scope.CanBreak = parent.CanBreak
 		end
-		scope.Parent = parent
+		if parent then
+			scope.Parent = parent
+			parent.Children[#parent.Children+1] = scope
+		end
 		scope.LocalMap = {}
+		scope.LocalsInOrder = {}
+		scope.Children = {}
 		scope.Upvalues = {}
 		function scope:GetLocal(name)
 			--first, try to get my variable
@@ -519,11 +524,16 @@ local function ParseLua(src)
 			return nil
 		end
 		function scope:CreateLocal(name, CanRename)
-			--avoid duplicately-named locals
-			local n, originalname = 2, name
-			while scope.LocalMap[name] do
-				name = originalname .. "" .. n
-				n = n + 1
+			--avoid duplicately-named locals (rename the first of the 2 for later code)
+			local existing = scope.LocalMap[name]
+			if existing then
+				local n, newname = 1, name .. 1
+				while scope.LocalMap[newname] do
+					n = n + 1
+					newname = name .. n
+				end
+				existing.Name = newname
+				scope.LocalMap[newname] = existing
 			end
 			--create my own var
 			local my = {}
@@ -533,6 +543,7 @@ local function ParseLua(src)
 			my.AccessCount = 0
 			--
 			scope.LocalMap[name] = my
+			scope.LocalsInOrder[#scope.LocalsInOrder+1] = my
 			--
 			return my
 		end
