@@ -524,25 +524,21 @@ local function ParseLua(src)
 			return nil
 		end
 		function scope:CreateLocal(name, CanRename)
-			--avoid duplicately-named locals (rename the first of the 2 for later code)
-			local existing = scope.LocalMap[name]
-			if existing then
-				local n, newname = 1, name .. 1
-				while scope.LocalMap[newname] do
-					n = n + 1
-					newname = name .. n
-				end
-				existing.Name = newname
-				scope.LocalMap[newname] = existing
+			--avoid duplicately-named locals by renaming the later defined one
+			local n, newname = 2, name
+			while scope.LocalMap[newname] do
+				newname = name .. n
+				n = n + 1
 			end
 			--create my own var
 			local my = {}
 			my.Scope = scope
-			my.Name = name
+			my.Name = newname
 			my.CanRename = CanRename == nil and true or CanRename
 			my.AccessCount = 0
 			--
 			scope.LocalMap[name] = my
+			scope.LocalMap[newname] = my
 			scope.LocalsInOrder[#scope.LocalsInOrder+1] = my
 			--
 			return my
