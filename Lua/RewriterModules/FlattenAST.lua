@@ -136,8 +136,6 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 		if not SeenVariables[Variable] then
 			VariableObjects[#VariableObjects+1] = {CanRename=true, Scope=BodyScope, Name=Variable}
 			SeenVariables[Variable] = true
-		elseif not Variable:find("^_%w+__dedicated") then
-			print("WARNING: Repeat definition of local " .. Variable .. " found during flattening - no guarantee of expected behaviour")
 		end
 	end
 	NewAST[1] = {
