@@ -497,29 +497,41 @@ local function ParseLua(src)
 			scope.CanBreak = parent.CanBreak
 		end
 		scope.Parent = parent
-		scope.LocalList = {}
 		scope.LocalMap = {}
+		scope.Upvalues = {}
 		function scope:GetLocal(name)
-			--first, try to get my variable 
+			--first, try to get my variable
 			local my = scope.LocalMap[name]
-			if my then return my end
+			if my then
+				my.AccessCount = my.AccessCount + 1
+				return my
+			end
 
 			--next, try parent
 			if scope.Parent then
 				local par = scope.Parent:GetLocal(name)
-				if par then return par end
+				if par then
+					scope.Upvalues[par] = true
+					return par
+				end
 			end
 
 			return nil
 		end
-		function scope:CreateLocal(name)
+		function scope:CreateLocal(name, CanRename)
+			--avoid duplicately-named locals
+			local n, originalname = 2, name
+			while scope.LocalMap[name] do
+				name = originalname .. "" .. n
+				n = n + 1
+			end
 			--create my own var
 			local my = {}
 			my.Scope = scope
 			my.Name = name
-			my.CanRename = true
+			my.CanRename = CanRename == nil and true or CanRename
+			my.AccessCount = 0
 			--
-			scope.LocalList[#scope.LocalList+1] = my
 			scope.LocalMap[name] = my
 			--
 			return my
@@ -1079,7 +1091,7 @@ local function ParseLua(src)
 			func.IsLocal = false
 			func.Name = name
 			if name.Indexer == ":" then
-				func.Scope:CreateLocal("self")
+				func.Scope:CreateLocal("self", false)
 			end
 			stat = func
 
@@ -1122,7 +1134,7 @@ local function ParseLua(src)
 				end
 				local name = tok:Get().Data
 				local localVar = scope:CreateLocal(name)
-				--	
+				--
 				local st, func = ParseFunctionArgsAndBody(scope)
 				if not st then return false, func end
 				--
