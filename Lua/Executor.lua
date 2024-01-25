@@ -15,7 +15,7 @@ local function CreateExecutionLoop(ast)
 	local True, False, Nil
 		= true, false, nil
 
-	local executeStatList
+	local executeStatlist
 	local executeExpression
 
 	local function CreateExecutionScope(parent)
@@ -104,7 +104,7 @@ local function CreateExecutionLoop(ast)
 					AmbiguityTracker[varargs] = {nil, inputArgCount-#expr[2]+1}
 					childScope:ML(-1, varargs) -- -1 is the reserved LocalID for local "..."
 				end
-				local ReturnData = executeStatList(expr[1], childScope)
+				local ReturnData = executeStatlist(expr[1], childScope)
 				if not ReturnData then --No return statement to handle
 					return
 				else--if ReturnData.T == 1 then --Get the return data
@@ -268,13 +268,13 @@ local function CreateExecutionLoop(ast)
 		elseif AstType == 2 then --IfStatement
 			for _, Clause in iPairs(statement[0]) do
 				if not Clause[0] or executeExpression(Clause[0], scope) then
-					return executeStatList(Clause[1], CreateExecutionScope(scope))
+					return executeStatlist(Clause[1], CreateExecutionScope(scope))
 				end
 			end
 
 		elseif AstType == 3 then --WhileStatement
 			while executeExpression(statement[0], scope) do
-				local ReturnData = executeStatList(statement[1], CreateExecutionScope(scope))
+				local ReturnData = executeStatlist(statement[1], CreateExecutionScope(scope))
 				if ReturnData then
 					if ReturnData.T == 2 then --Break, get out
 						return
@@ -285,7 +285,7 @@ local function CreateExecutionLoop(ast)
 			end
 
 		elseif AstType == 4 then --DoStatement
-			return executeStatList(statement[1], CreateExecutionScope(scope))
+			return executeStatlist(statement[1], CreateExecutionScope(scope))
 
 		elseif AstType == 5 then --NumericForStatement
 			local var = Tonumber(executeExpression(statement[0], scope))
@@ -295,7 +295,7 @@ local function CreateExecutionLoop(ast)
 			while (step > 0 and var <= limit) or (step <= 0 and var >= limit) do
 				local childScope = CreateExecutionScope(scope)
 				childScope:ML(statement[4][0], var)
-				local ReturnData = executeStatList(statement[1], childScope)
+				local ReturnData = executeStatlist(statement[1], childScope)
 				if ReturnData then
 					if ReturnData.T == 2 then --Break, get out
 						return
@@ -330,7 +330,7 @@ local function CreateExecutionLoop(ast)
 				for i = 1, #statement[2] do
 					childScope:ML(statement[2][i][0], args[i])
 				end
-				local ReturnData = executeStatList(statement[1], childScope)
+				local ReturnData = executeStatlist(statement[1], childScope)
 				if ReturnData then
 					if ReturnData.T == 2 then --Break, get out
 						return
@@ -343,7 +343,7 @@ local function CreateExecutionLoop(ast)
 		elseif AstType == 7 then --ReoeatStatement
 			local subScope = CreateExecutionScope(scope)
 			repeat
-				local ReturnData = executeStatList(statement[1], subScope)
+				local ReturnData = executeStatlist(statement[1], subScope)
 				if ReturnData then
 					if ReturnData.T == 2 then --Break, get out
 						return
@@ -409,7 +409,7 @@ local function CreateExecutionLoop(ast)
 		end
 	end
 
-	executeStatList = function(statList, scope)
+	executeStatlist = function(statList, scope)
 		--A type of 1 is a return
 		--A type of 2 is a break
 		--A type of 3 is a continue
@@ -553,7 +553,7 @@ local function CreateExecutionLoop(ast)
 			end
 			return Deserialize()
 		end)(ast)
-		local ReturnData = executeStatList(ast, CreateExecutionScope())
+		local ReturnData = executeStatlist(ast, CreateExecutionScope())
 		if not ReturnData then --No return statement to handle
 			return
 		else--if ReturnData.T == 1 then --Get the return data

@@ -72,7 +72,7 @@ local function CompileWithFormattingData(Lines)
 	end
 end
 
-local WriteStatList
+local WriteStatlist
 local function WriteExpression(Expression, Scope)
 	Expression.ParenCount = Expression.ParenCount or 0
 	if Expression.AstType == "Function" then
@@ -84,7 +84,7 @@ local function WriteExpression(Expression, Scope)
 			NewArguments[#NewArguments+1] = "..."
 		end
 		local Lines = {"function(" .. table.concat(NewArguments, CommaSplitter) .. ")"}
-		local Body = WriteStatList(Expression.Body)
+		local Body = WriteStatlist(Expression.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
@@ -227,7 +227,7 @@ local function WriteStatement(Statement, Scope)
 			NewArguments[#NewArguments+1] = "..."
 		end
 		local Lines = {start .. "(" .. table.concat(NewArguments, CommaSplitter) .. ")"}
-		local Body = WriteStatList(Statement.Body)
+		local Body = WriteStatlist(Statement.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
@@ -244,7 +244,7 @@ local function WriteStatement(Statement, Scope)
 			else
 				Lines[#Lines+1] = "else"
 			end
-			local Body = WriteStatList(Clause.Body)
+			local Body = WriteStatlist(Clause.Body)
 			for i = 1,#Body do
 				Lines[#Lines+1] = Body[i]
 			end
@@ -254,7 +254,7 @@ local function WriteStatement(Statement, Scope)
 
 	elseif Statement.AstType == "WhileStatement" then
 		local Lines = {"while " .. WriteExpression(Statement.Condition, Scope) .. " do"}
-		local Body = WriteStatList(Statement.Body)
+		local Body = WriteStatlist(Statement.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
@@ -263,7 +263,7 @@ local function WriteStatement(Statement, Scope)
 
 	elseif Statement.AstType == "DoStatement" then
 		local Lines = {"do"}
-		local Body = WriteStatList(Statement.Body)
+		local Body = WriteStatlist(Statement.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
@@ -276,7 +276,7 @@ local function WriteStatement(Statement, Scope)
 		local End = WriteExpression(Statement.End, Scope)
 		local Elements = {Start, End, Statement.Step and WriteExpression(Statement.Step, Scope)}
 		local Lines = {"for " .. Variable .. EqualsSplitter .. table.concat(Elements, CommaSplitter) .. " do"}
-		local Body = WriteStatList(Statement.Body)
+		local Body = WriteStatlist(Statement.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
@@ -293,7 +293,7 @@ local function WriteStatement(Statement, Scope)
 			NewGenerators[i] = WriteExpression(Generator, Scope)
 		end
 		local Lines = {"for " .. table.concat(NewVariables, CommaSplitter) .. " in " .. table.concat(NewGenerators, CommaSplitter) .. " do"}
-		local Body = WriteStatList(Statement.Body)
+		local Body = WriteStatlist(Statement.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
@@ -302,7 +302,7 @@ local function WriteStatement(Statement, Scope)
 
 	elseif Statement.AstType == "RepeatStatement" then
 		local Lines = {"repeat"}
-		local Body = WriteStatList(Statement.Body)
+		local Body = WriteStatlist(Statement.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
@@ -377,10 +377,10 @@ local function StringSplit(str, splitter)
 end
 
 --cringe string split magic but its needed, trust
-WriteStatList = function(StatList, DontIndent)
-	local Scope = StatList.Body.Scope
+WriteStatlist = function(Statlist, DontIndent)
+	local Scope = Statlist.Body.Scope
 	local out = {}
-	for _,Statement in ipairs(StatList.Body) do
+	for _,Statement in ipairs(Statlist.Body) do
 		local StatementText = StringSplit(WriteStatement(Statement, Scope) .. ConsiderSemicolon(), "\n")
 		for i = 1,#StatementText do
 			out[#out+1] = StatementText[i]
@@ -414,5 +414,5 @@ return function(AST, Options)
 	if RewriterOptions.ObscureVariableNames or RewriterOptions.MinifyVariableNames then
 		RenameScopeVariables(AST.Scope)
 	end
-	return WriteStatList(AST, true)
+	return WriteStatlist(AST, true)
 end

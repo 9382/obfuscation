@@ -5,9 +5,9 @@ Functions who's return dictates a breaking statement
 * BreakStatement
 * ContinueStatement
 
-The returns of these statements land themselves into executeStatList, which MUST immediately evaluate the values if its a ReturnStatement or risk losing the right scope
+The returns of these statements land themselves into executeStatlist, which MUST immediately evaluate the values if its a ReturnStatement or risk losing the right scope
 
-When executeStatList processes a return, it should ideally pass on an internally managed table along the structure of {Parsed=true, Type=1/2/3, Data=({} if applicable, nil otherwise) }
+When executeStatlist processes a return, it should ideally pass on an internally managed table along the structure of {Parsed=true, Type=1/2/3, Data=({} if applicable, nil otherwise) }
 Type 1 is Return, Type 2 is Break, Type 3 is Continue
 The data should not be expanded unless being handled by the end of the execution loop or a Function.
 
@@ -37,7 +37,7 @@ BreakStatement
 ContinueStatement
 	Return false
 
-executeStatList
+executeStatlist
 	If the return type is a table (Return):
 		Ensure its not an internal marker (Check if t.Parsed == true)
 		If it is NOT an internal marker:

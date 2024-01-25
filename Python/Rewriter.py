@@ -665,14 +665,14 @@ def CreateExecutionLoop(code):
 		elif stType == ast.If:
 			out = []
 			out.append(f"if {ExecuteExpression(statement.test, scope)}:")
-			out.extend(ExecuteStatList(statement.body, scope))
+			out.extend(ExecuteStatlist(statement.body, scope))
 			if len(statement.orelse) > 0:
 				if OPTION_use_elif and len(statement.orelse) == 1 and type((alternate := statement.orelse[0])) == ast.If:
 					out.append(f"elif {ExecuteExpression(alternate.test, scope)}:")
 					out.extend(ExecuteStatement(alternate, scope)[1:])
 				else:
 					out.append("else:")
-					out.extend(ExecuteStatList(statement.orelse, scope))
+					out.extend(ExecuteStatlist(statement.orelse, scope))
 			elif OPTION_insert_junk:
 				out.extend(["else:",f"{OPTION_indent_char}pass"])
 			return out
@@ -680,10 +680,10 @@ def CreateExecutionLoop(code):
 		elif stType == ast.While:
 			out = []
 			out.append(f"while {ExecuteExpression(statement.test, scope)}:")
-			out.extend(ExecuteStatList(statement.body, scope))
+			out.extend(ExecuteStatlist(statement.body, scope))
 			if len(statement.orelse) > 0:
 				out.append("else:")
-				out.extend(ExecuteStatList(statement.orelse, scope))
+				out.extend(ExecuteStatlist(statement.orelse, scope))
 			elif OPTION_insert_junk:
 				out.extend(["else:",f"{OPTION_indent_char}pass"])
 			return out
@@ -691,8 +691,8 @@ def CreateExecutionLoop(code):
 		elif stType in [ast.For, ast.AsyncFor]:
 			iterRange = ExecuteExpression(statement.iter, scope)
 			target = ExecuteExpression(statement.target, scope)
-			body = ExecuteStatList(statement.body, scope)
-			orelse = ExecuteStatList(statement.orelse, scope)
+			body = ExecuteStatlist(statement.body, scope)
+			orelse = ExecuteStatlist(statement.orelse, scope)
 			out = []
 			out.append(f"{stType == ast.AsyncFor and 'async ' or ''}for {target} in {iterRange}:")
 			out.extend(body)
@@ -706,23 +706,23 @@ def CreateExecutionLoop(code):
 		elif stType in [ast.With, ast.AsyncWith]:
 			out = []
 			out.append(f"{stType == ast.AsyncWith and 'async ' or ''}with {', '.join(ExecuteExpression(item, scope) for item in statement.items)}:")
-			out.extend(ExecuteStatList(statement.body, scope))
+			out.extend(ExecuteStatlist(statement.body, scope))
 			return out
 
 		elif stType == ast.Try:
 			out = []
 			out.append("try:")
-			out.extend(ExecuteStatList(statement.body, scope))
+			out.extend(ExecuteStatlist(statement.body, scope))
 			for handler in statement.handlers:
 				out.extend(ExecuteStatement(handler, scope))
 			if len(statement.orelse) > 0:
 				out.append("else:")
-				out.extend(ExecuteStatList(statement.orelse, scope))
+				out.extend(ExecuteStatlist(statement.orelse, scope))
 			elif OPTION_insert_junk:
 				out.extend(["else:",f"{OPTION_indent_char}pass"])
 			if len(statement.finalbody) > 0:
 				out.append("finally:")
-				out.extend(ExecuteStatList(statement.finalbody, scope))
+				out.extend(ExecuteStatlist(statement.finalbody, scope))
 			elif OPTION_insert_junk:
 				out.extend(["finally:",f"{OPTION_indent_char}pass"])
 			return out
@@ -737,7 +737,7 @@ def CreateExecutionLoop(code):
 					out.append(f"except {typeText}:")
 			else:
 				out.append("except:")
-			out.extend(ExecuteStatList(statement.body, scope))
+			out.extend(ExecuteStatlist(statement.body, scope))
 			return out
 
 		elif stType == ast.Import:
@@ -752,7 +752,7 @@ def CreateExecutionLoop(code):
 			decorators = ImplementObjectDecorators(statement.decorator_list, scope)
 			name = scope.createVar(statement.name)
 			args = HandleArgs(subScope, statement.args)
-			body = ExecuteStatList(statement.body, subScope)
+			body = ExecuteStatlist(statement.body, subScope)
 			out.extend(decorators)
 			returntype = (" -> "+random.choice(AnnotationTypes) if OPTION_add_useless_annotations else "")
 			if stType == ast.AsyncFunctionDef:
@@ -773,7 +773,7 @@ def CreateExecutionLoop(code):
 			for keyword in statement.keywords:
 				args.append(ExecuteExpression(keyword, scope))
 			args = ", ".join(args)
-			body = ExecuteStatList(statement.body, subScope)
+			body = ExecuteStatlist(statement.body, subScope)
 			out.extend(decorators)
 			out.append(f"class {name}({args}):")
 			out.extend(body)
@@ -783,7 +783,7 @@ def CreateExecutionLoop(code):
 			raise ExecutorException(f"[!] Unimplemented statement type {stType}")
 		raise ExecutorException(f"[!] Statement of type {stType} never returned")
 
-	def ExecuteStatList(statList, scope, Indent=True):
+	def ExecuteStatlist(statList, scope, Indent=True):
 		debugprint("Executing statement list...")
 		compiledText = []
 		for statement in statList:
@@ -907,7 +907,7 @@ def CreateExecutionLoop(code):
 		if _DEBUG:
 			beforeRun = ast.dump(code)
 		try:
-			out = ExecuteStatList(code.body, scope, Indent=False)
+			out = ExecuteStatlist(code.body, scope, Indent=False)
 		except BaseException as exc:
 			if _DEBUG:
 				afterRun = ast.dump(code)

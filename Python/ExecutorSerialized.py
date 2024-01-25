@@ -517,13 +517,13 @@ def CreateExecutionLoop(code):
 
 		elif stType == 10:
 			if ExecuteExpression(statement[1], scope):
-				return ExecuteStatList(BodyList[statement[2]], scope)
+				return ExecuteStatlist(BodyList[statement[2]], scope)
 			else:
-				return ExecuteStatList(BodyList[statement[3]], scope)
+				return ExecuteStatlist(BodyList[statement[3]], scope)
 
 		elif stType == 9:
 			while ExecuteExpression(statement[1], scope):
-				out = ExecuteStatList(BodyList[statement[2]], scope)
+				out = ExecuteStatlist(BodyList[statement[2]], scope)
 				if out != None:
 					if out.Type == "Break":
 						break
@@ -532,13 +532,13 @@ def CreateExecutionLoop(code):
 					else:
 						return out
 			else:
-				return ExecuteStatList(BodyList[statement[3]], scope)
+				return ExecuteStatlist(BodyList[statement[3]], scope)
 
 		elif stType == 8:
 			iterRange = ExecuteExpression(statement[2], scope)
 			for value in iterRange:
 				Assign(statement[1], value, scope)
-				out = ExecuteStatList(BodyList[statement[3]], scope)
+				out = ExecuteStatlist(BodyList[statement[3]], scope)
 				if out != None:
 					if out.Type == "Break":
 						break
@@ -547,7 +547,7 @@ def CreateExecutionLoop(code):
 					else:
 						return out
 			else:
-				return ExecuteStatList(BodyList[statement[4]], scope)
+				return ExecuteStatlist(BodyList[statement[4]], scope)
 
 		elif stType == 11:
 			toExit = []
@@ -560,7 +560,7 @@ def CreateExecutionLoop(code):
 					#If this isnt a name expr, then uh, good luck!
 					scope.setVar(storeAs, out)
 			try:
-				out = ExecuteStatList(BodyList[statement[2]], scope)
+				out = ExecuteStatlist(BodyList[statement[2]], scope)
 			except BaseException as exc:
 				for item in toExit:
 					item.__exit__()
@@ -572,7 +572,7 @@ def CreateExecutionLoop(code):
 
 		elif stType == 13:
 			try:
-				out = ExecuteStatList(BodyList[statement[1]], scope)
+				out = ExecuteStatlist(BodyList[statement[1]], scope)
 				if out != None:
 					return out
 			except ExecutorException as exc: #Executor errors are not to reach the source code ever
@@ -583,16 +583,16 @@ def CreateExecutionLoop(code):
 						subScope = VariableScope(scope, "asclause")
 						if handler[1]:
 							subScope.setVarRaw(handler[1], exc)
-						out = ExecuteStatList(BodyList[handler[2]], subScope)
+						out = ExecuteStatlist(BodyList[handler[2]], subScope)
 						if out != None:
 							return out
 						break
 			else:
-				out = ExecuteStatList(BodyList[statement[2]], scope)
+				out = ExecuteStatlist(BodyList[statement[2]], scope)
 				if out != None:
 					return out
 			finally:
-				return ExecuteStatList(BodyList[statement[4]], scope)
+				return ExecuteStatlist(BodyList[statement[4]], scope)
 
 		elif stType == 15:
 			for name in statement[1]:
@@ -626,7 +626,7 @@ def CreateExecutionLoop(code):
 			def FunctionHandler(*args, **kwargs):
 				subScope = VariableScope(scope, "function")
 				HandleArgAssignment(subScope, statement[2], statement[1], args, kwargs)
-				out = ExecuteStatList(BodyList[statement[3]], subScope)
+				out = ExecuteStatlist(BodyList[statement[3]], subScope)
 				if out != None:
 					if out.Type == "Break" or out.Type == "Continue":
 						raise SyntaxError(f"'{out.Type}' outside loop")
@@ -641,7 +641,7 @@ def CreateExecutionLoop(code):
 			async def FunctionHandler(*args, **kwargs):
 				subScope = VariableScope(scope, "function")
 				HandleArgAssignment(subScope, statement[2], statement[1], args, kwargs)
-				out = ExecuteStatList(BodyList[statement[3]], subScope)
+				out = ExecuteStatlist(BodyList[statement[3]], subScope)
 				if out != None:
 					if out.Type == "Break" or out.Type == "Continue":
 						raise SyntaxError(f"'{out.Type}' outside loop")
@@ -662,7 +662,7 @@ def CreateExecutionLoop(code):
 			DummyClass.__name__ = statement[1]
 			DummyClass.__qualname__ = statement[1]
 			subScope = ClassScope(scope, DummyClass) #Custom class subscope
-			out = ExecuteStatList(BodyList[statement[4]], subScope) #We shouldn't end early, period
+			out = ExecuteStatlist(BodyList[statement[4]], subScope) #We shouldn't end early, period
 			if out != None:
 				raise SyntaxError(f"Now that is just illegal class logic, I don't even know what to say anymore")
 			DummyClass = ImplementObjectDecorators(DummyClass, statement[5], scope)
@@ -671,7 +671,7 @@ def CreateExecutionLoop(code):
 		else:
 			raise ExecutorException(f"[!] Unimplemented statement type {stType}")
 
-	def ExecuteStatList(statList, scope):
+	def ExecuteStatlist(statList, scope):
 		for statement in statList:
 			out = ExecuteStatement(statement, scope)
 			if out != None: #Send off our return/break/continue statement
@@ -934,7 +934,7 @@ def CreateExecutionLoop(code):
 	def __main__():
 		scope = VariableScope(None, "core")
 		try:
-			out = ExecuteStatList(CoreCode, scope)
+			out = ExecuteStatlist(CoreCode, scope)
 		except BaseException as exc:
 			raise exc
 		else:
