@@ -89,7 +89,7 @@ local function Main(C)
 		print("WARNING: Aggressive variable minification has little effect when flattening code")
 	end
 
-	if (RewriterOptions.MinifyVariableNames and RewriterOptions.AggressivelyMinifyVariables) and (RewriterOptions.AddJunkCode or RewriterOptions.PerformCodeFlattening) then
+	if (RewriterOptions.MinifyVariableNames and RewriterOptions.AggressivelyMinifyVariables) and RewriterOptions.PerformCodeFlattening then
 		error("ERROR: AggressivelyMinifyVariables is currently incompatible with AddJunkCode/PerformCodeFlattening")
 	end
 

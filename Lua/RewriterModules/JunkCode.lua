@@ -8,7 +8,7 @@ local function GenerateRandomString(P1, P2)
 	elseif P1 then --Exact
 		-- Do nothing
 	else --No input, use default
-		P1 = math.random(20, 25)
+		P1 = math.random(5, 6)
 	end
 	local out = ""
 	for i = 1,P1 do
@@ -27,10 +27,10 @@ We can write junk statements in any formatting style we want
 since we use ParseLua to make it into reliable AST data
 --]]
 local JunkStatements = {
-	function()
-		local var = GenerateRandomString()
-		return "local " .. var .. "; if " .. var .. " then " .. var .. "() end"
-	end,
+	-- function()
+	-- 	local var = GenerateRandomString()
+	-- 	return "local " .. var .. "; if " .. var .. " then " .. var .. "() end"
+	-- end, -- doesnt work; 1 statement limit
 	function()
 		return "local " .. GenerateRandomString()
 	end,
@@ -53,13 +53,22 @@ local JunkStatements = {
 	function()
 		return "local " .. GenerateRandomString() .. " = {}"
 	end,
-	function()
-		local var = GenerateRandomString()
-		return "local " .. var .. " = function() end; while " .. var .. " do " .. var .. " = " .. var .. "() end"
-	end
+	-- function()
+	-- 	local var = GenerateRandomString()
+	-- 	return "local " .. var .. " = function() end; while " .. var .. " do " .. var .. " = " .. var .. "() end"
+	-- end, -- doesnt work; 1 statement limit
 }
-local function GenerateJunkCode()
+local function GenerateJunkCode(Scope)
 	local s,r = ParseLua(JunkStatements[math.random(1,#JunkStatements)]())
+	for _, Local in next, r.Scope.LocalsInOrder do
+		Local.Scope = Scope
+		Scope.LocalsInOrder[#Scope.LocalsInOrder+1] = Local
+	end
+	for _, Child in next, r.Scope.Children do
+		Child.Parent = Scope
+		Scope.Children[#Scope.Children+1] = Child
+	end
+	r.Scope = Scope
 	r.Body[1].IsJunk = true
 	return r.Body[1]
 end
@@ -71,6 +80,7 @@ local function InsertJunkCode(TableObj, blacklist)
 	end
 	blacklist[TableObj] = true
 	if TableObj.AstType == "Statlist" then
+		local Scope = TableObj.Scope
 		TableObj = TableObj.Body
 		local LastStatement = #TableObj > 0 and TableObj[#TableObj].AstType
 		local IterationStart = #TableObj+1
@@ -79,7 +89,7 @@ local function InsertJunkCode(TableObj, blacklist)
 		end
 		for i = IterationStart, 1, -1 do
 			if math.random() < RewriterOptions.JunkCodeChance then
-				table.insert(TableObj, i, GenerateJunkCode())
+				table.insert(TableObj, i, GenerateJunkCode(Scope))
 			end
 		end
 	end
