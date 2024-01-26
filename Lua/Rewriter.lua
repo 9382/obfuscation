@@ -2,6 +2,7 @@ local ParseLua = require("./LuaParser")
 local LuaWriter = require("./RewriterModules/LuaWriter")
 local PerformFlattening = require("./RewriterModules/FlattenAST")
 local InsertJunkCode = require("./RewriterModules/JunkCode")
+local RenameVariables = require("./RewriterModules/VariableRenamer")
 
 -- A lua code rewriter. The lua code to be rewritten goes at the very bottom
 
@@ -37,6 +38,11 @@ local RewriterOptions = {
 	--== MinifyVariableNames ==--
 	-- Replaces local variable names with minified strings. The variable must be localised. Takes priority over ObscureVariableNames
 	MinifyVariableNames = true,
+
+	--== AggressivelyMinifyVariableNames ==--
+	-- Allows the minifier to re-use variable names the moment the variable is gauranteed to be unused
+	-- Except to see frequent repetition of variable names, including in the same scope
+	AggressivelyMinifyVariables = true,
 
 	--== ObscureNumbers / ObscureStrings / ObscureGlobals ==--
 	-- Turns normal constants into a complex form
@@ -79,12 +85,24 @@ local function Main(C)
 		print("WARNING: Semicolons should really be used when no newlines are present")
 	end
 
+	if RewriterOptions.MinifyVariableNames and RewriterOptions.AggressivelyMinifyVariables and RewriterOptions.PerformCodeFlattening then
+		print("WARNING: Aggressive variable minification has little effect when flattening code")
+	end
+
+	if (RewriterOptions.MinifyVariableNames and RewriterOptions.AggressivelyMinifyVariables) and (RewriterOptions.AddJunkCode or RewriterOptions.PerformCodeFlattening) then
+		error("ERROR: AggressivelyMinifyVariables is currently incompatible with AddJunkCode/PerformCodeFlattening")
+	end
+
 	if RewriterOptions.AddJunkCode then
 		InsertJunkCode(p, RewriterOptions)
 	end
 
 	if RewriterOptions.PerformCodeFlattening then
 		p.Body = PerformFlattening(p, RewriterOptions)
+	end
+
+	if RewriterOptions.ObscureVariableNames or RewriterOptions.MinifyVariableNames then
+		RenameVariables(p, RewriterOptions)
 	end
 
 	local result = LuaWriter(p, RewriterOptions)

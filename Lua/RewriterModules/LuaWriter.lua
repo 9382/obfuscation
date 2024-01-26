@@ -37,33 +37,6 @@ local function GenerateRandomString(P1, P2)
 	return out
 end
 
-local LastVar = {}
-local function GenerateVariableName()
-	if not RewriterOptions.MinifyVariableNames then
-		return GenerateRandomString()
-	end
-	for i = #LastVar, 1, -1 do
-		if LastVar[i] < #_ValidCharacters and (i ~= 1 or LastVar[i] < #_ValidCharacters-10) then
-			LastVar[i] = LastVar[i] + 1
-			local out = ""
-			for _,j in next,LastVar do
-				out = out .. _ValidCharacters:sub(j, j)
-			end
-			if out == "if" or out == "do" or out == "in" or out == "as" then -- safety
-				return GenerateVariableName()
-			end
-			return out
-		else
-			LastVar[i] = 1
-		end
-	end
-	-- Reached loop end, restart and become bigger
-	for i = 1, #LastVar + 1 do
-		LastVar[i] = 1
-	end
-	return string.rep(_ValidCharacters:sub(1, 1), #LastVar)
-end
-
 local function CompileWithFormattingData(Lines)
 	if RewriterOptions.UseNewlines then
 		return table.concat(Lines,"\n")
@@ -394,25 +367,9 @@ WriteStatlist = function(Statlist, DontIndent)
 	return out
 end
 
-local function RenameScopeVariables(Scope)
-	for i,Local in next,Scope.LocalsInOrder do
-		if Local.CanRename then
-			Local.Name = GenerateVariableName(Local.Name)
-			Local.CanRename = false --shouldn't have to do this but flattener is trying to fight me
-			--theres a potential that LocalStatement/Function special handling is double-defining locals
-		end
-	end
-	for _,child in next,Scope.Children do
-		RenameScopeVariables(child)
-	end
-end
-
 return function(AST, Options)
 	RewriterOptions = Options
 	CommaSplitter = (RewriterOptions.AddExtraSpacing and ", " or ",")
 	EqualsSplitter = (RewriterOptions.AddExtraSpacing and " = " or "=")
-	if RewriterOptions.ObscureVariableNames or RewriterOptions.MinifyVariableNames then
-		RenameScopeVariables(AST.Scope)
-	end
 	return WriteStatlist(AST, true)
 end
