@@ -42,7 +42,7 @@ local RewriterOptions = {
 	--== AggressivelyMinifyVariableNames ==--
 	-- Allows the minifier to re-use variable names the moment the variable is gauranteed to be unused
 	-- Except to see frequent repetition of variable names, including in the same scope
-	AggressivelyMinifyVariables = true,
+	AggressivelyMinifyVariables = false,
 
 	--== ObscureNumbers / ObscureStrings / ObscureGlobals ==--
 	-- Turns normal constants into a complex form
