@@ -34,7 +34,7 @@ local function GenerateVariableName()
 			for _,j in next,LastVar do
 				out = out .. _ValidCharacters:sub(j, j)
 			end
-			if out == "if" or out == "do" or out == "in" or out == "as" then -- safety
+			if out == "if" or out == "do" or out == "in" or out == "as" or out == "_G" then -- safety
 				return GenerateVariableName()
 			end
 			return out
