@@ -3,6 +3,7 @@ local LuaWriter = require("./RewriterModules/LuaWriter")
 local PerformFlattening = require("./RewriterModules/FlattenAST")
 local InsertJunkCode = require("./RewriterModules/JunkCode")
 local RenameVariables = require("./RewriterModules/VariableRenamer")
+local FunnyStuff = require("./RewriterModules/FunnyStuff")
 
 -- A lua code rewriter. The lua code to be rewritten goes at the very bottom
 
@@ -72,6 +73,10 @@ local RewriterOptions = {
 	--== PerformCodeFlattening ==--
 	-- Performs code flattening to help obscure the normal flow of the function
 	PerformCodeFlattening = false,
+
+	--== CenterAlignedCode ==--
+	-- A fun option that center-aligns all code
+	CenterAlignedCode = false,
 }
 
 local function Main(C)
@@ -105,12 +110,17 @@ local function Main(C)
 		RenameVariables(p, RewriterOptions)
 	end
 
-	local result = LuaWriter(p, RewriterOptions)
-	return true, table.concat(result,"\n")
+	local lines = LuaWriter(p, RewriterOptions)
+
+	if RewriterOptions.CenterAlignedCode then
+		FunnyStuff(lines, RewriterOptions)
+	end
+
+	return true, table.concat(lines,"\n")
 end
 
-print(Main([==[
+print(select(2, Main([==[
 print("Test")
-]==]))
+]==])))
 
 return Main
