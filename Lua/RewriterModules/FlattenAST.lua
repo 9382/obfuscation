@@ -1,5 +1,59 @@
 local RewriterOptions
 
+--[[ Apply Binary Search
+Optimises the flattener's if structure
+Instead of a huge chain of "==1 ==2 ==3 ==4", we use dividing <= checks
+This reduces the total amount of checks performed for each clause from N to log2(MaxN), which is great for us
+We already expect our list to be sorted on arrival
+--]]
+local function ApplyBinarySearch(BodyScope, ClauseList, Start, End)
+	-- We expect a range size of 1, 2, or 3+
+	local Range = End-Start + 1
+	local InstructionExpression = ClauseList[1].Condition.Lhs
+	if Range < 1 or Range%1 ~= 0 then
+		error("Invalid input into ApplyBinarySearch")
+	elseif Range == 1 then
+		-- return just the body, no if statement
+		return ClauseList[Start].Body.Body
+
+	elseif Range == 2 then
+		-- return a 2-piece if statement
+		return {{
+			AstType = "IfStatement",
+			Clauses = {
+				{
+					Condition = ClauseList[Start].Condition,
+					Body = ClauseList[Start].Body
+				}, {
+					Body = ClauseList[End].Body
+				}
+			}
+		}}
+
+	else
+		-- get ApplyBinarySearch of top half and bottom half
+		-- put into basic table
+		-- Managing these scopes is gonna be, uh, nightmarish if we want aggressive renaming to work
+		local MidPoint = math.floor((Start+End)/2)
+		return {{
+			AstType = "IfStatement",
+			Clauses = {
+				{
+					Condition = {
+						AstType="BinopExpr", Op="<=",
+						Rhs={AstType="NumberExpr", Value={Data=tostring(MidPoint)}},
+						Lhs=InstructionExpression,
+					},
+					-- we don't listify the return for the AST, we expect the return to do that for us (including us)
+					Body = {AstType="Statlist", Scope=BodyScope, Body=ApplyBinarySearch(BodyScope, ClauseList, Start, MidPoint)}
+				}, {
+					Body = {AstType="Statlist", Scope=BodyScope, Body=ApplyBinarySearch(BodyScope, ClauseList, MidPoint+1, End)}
+				}
+			}
+		}}
+	end
+end
+
 --[[ Control Flow Flattener
 Flattens the control into a straight-line format, with each statement being split up
 
@@ -481,6 +535,15 @@ local function PerformFlattening(Body, FunctionVariables, FunctionDepth)
 	end
 
 	local MaxInstructionN = #CollectedInstructions
+
+	if RewriterOptions.ApplyBinarySearch and #CollectedInstructions > 3 then
+		table.sort(CollectedInstructions, function(a, b)
+			a = tonumber(a.Condition.Rhs.Value.Data)
+			b = tonumber(b.Condition.Rhs.Value.Data)
+			return a < b --wild
+		end)
+		CollectedInstructions = ApplyBinarySearch(BodyScope, CollectedInstructions, 1, MaxInstructionN)[1].Clauses
+	end
 
 	--Wrap it up
 	NewAST[2] = {

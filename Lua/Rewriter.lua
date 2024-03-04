@@ -74,6 +74,10 @@ local RewriterOptions = {
 	-- Performs code flattening to help obscure the normal flow of the function
 	PerformCodeFlattening = false,
 
+	--== ApplyBinarySearch ==--
+	-- Optimises the if structure of the code flattener
+	ApplyBinarySearch = false,
+
 	--== CenterAlignedCode ==--
 	-- A fun option that center-aligns all code
 	CenterAlignedCode = false,
