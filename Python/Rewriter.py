@@ -12,6 +12,9 @@ if not _DEBUG:
 # The indentation character used. Generally either a tab or spaces will be the input
 OPTION_indent_char = "\t"
 
+# Make the indentation inconsistent and random but still legal. Ignores the given indent input
+OPTION_variable_indentation = False
+
 # Attempts to ""obfuscate"" numbers by abstracting them. Slightly messy looking
 OPTION_obscure_numbers = False
 
@@ -820,8 +823,11 @@ def CreateExecutionLoop(code):
 				debugprint(":( poor type return to statlist",type(out))
 				compiledText.append(str(out))
 		if Indent:
+			IndentChar = OPTION_variable_indentation and (
+				random.randint(1, 4)==1 and "\t"*random.randint(1, 2) or " "*random.randint(1, 6) # Yes, this is legal indentation logic
+			) or OPTION_indent_char
 			for i in range(len(compiledText)):
-				compiledText[i] = f"{OPTION_indent_char}{compiledText[i]}"
+				compiledText[i] = f"{IndentChar}{compiledText[i]}"
 		return compiledText
 
 	#def f2(x, y, z=None, *, a, b, c=None, **k):
