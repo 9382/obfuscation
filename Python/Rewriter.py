@@ -19,6 +19,7 @@ OPTION_variable_indentation = False
 OPTION_obscure_numbers = False
 
 # Replaces strings with chr() compilation sequences
+# Warning: Behaves horribly with f"strings"
 OPTION_obscure_strings = False
 
 # Attempts to re-name variables with random text. Tries to avoid changing anything that could be a concern, but it isn't perfect. Also INCREDIBLY messy
