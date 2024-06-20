@@ -99,7 +99,7 @@ local function Main(C)
 	end
 
 	if (RewriterOptions.MinifyVariableNames and RewriterOptions.AggressivelyMinifyVariables) and RewriterOptions.PerformCodeFlattening then
-		error("ERROR: AggressivelyMinifyVariables is currently incompatible with AddJunkCode/PerformCodeFlattening")
+		error("ERROR: AggressivelyMinifyVariables is currently incompatible with PerformCodeFlattening")
 	end
 
 	if RewriterOptions.AddJunkCode then

@@ -328,7 +328,7 @@ local function WriteStatement(Statement, Scope)
 		return WriteExpression(Statement.Expression, Scope)
 
 	end
-	error("We didn't return on a statement!? " .. tostring(Statement))
+	error("We didn't return on a statement!? " .. tostring(Statement) .. " " .. tostring(type(Statement) == "table" and Statement.AstType or "<no AST>"))
 end
 
 local function StringSplit(str, splitter)
