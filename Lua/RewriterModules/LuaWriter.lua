@@ -84,7 +84,8 @@ local function WriteExpression(Expression, Scope)
 
 	elseif Expression.AstType == "CallExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
-		if Expression.Base.AstType == "Function" or Expression.Base.AstType == "NilExpr" then --Special case for anonymous function calling
+		local BaseAst = Expression.Base.AstType
+		if BaseAst ~= "VarExpr" and BaseAst ~= "MemberExpr" and BaseAst ~= "IndexExpr" then --Special case for calling values instead of variables
 			Base = "(" .. Base .. ")"
 		end
 		if RewriterOptions.UseShortCallExprs and #Expression.Arguments == 1 then
@@ -105,7 +106,8 @@ local function WriteExpression(Expression, Scope)
 
 	elseif Expression.AstType == "StringCallExpr" or Expression.AstType == "TableCallExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
-		if Expression.Base.AstType == "Function" then --Special case for anonymous function calling
+		local BaseAst = Expression.Base.AstType
+		if BaseAst ~= "VarExpr" and BaseAst ~= "MemberExpr" and BaseAst ~= "IndexExpr" then --Special case for calling values instead of variables
 			Base = "(" .. Base .. ")"
 		end
 		local Argument
@@ -125,7 +127,7 @@ local function WriteExpression(Expression, Scope)
 
 	elseif Expression.AstType == "NumberExpr" then
 		local NumberValue = tonumber(Expression.Value.Data)
-		if RewriterOptions.ObscureNumbers and tostring(NumberValue) == Expression.Value.Data then
+		if RewriterOptions.ObscureNumbers and tostring(NumberValue) == Expression.Value.Data then -- TODO: :/ code, this should ideally be elsewhere
 			local offset = math.random(-10,10)
 			local mode = math.random(1,3)
 			if mode == 1 then
