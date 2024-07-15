@@ -67,14 +67,14 @@ local function CreateExecutionLoop(ast)
 		for i = 1,OutLength do
 			Container[ELLength+i-1] = Out[i]
 		end
-		AmbiguityTracker[Container] = {nil,ELLength+OutLength}
+		AmbiguityTracker[Container] = {Nil,ELLength+OutLength}
 		return ELLength+OutLength-1
 	end
 	local function SafeUnpack(t, dontClear) --Unpack while considering the real length of the table (see above)
 		local TData = AmbiguityTracker[t]
 		if TData then
 			if not dontClear then --For "..."
-				AmbiguityTracker[t] = nil --Clear memory, since we won't need it afterwards
+				AmbiguityTracker[t] = Nil --Clear memory, since we won't need it afterwards
 			end
 			return Unpack(t,1,TData[2]-1)
 		else
@@ -101,7 +101,7 @@ local function CreateExecutionLoop(ast)
 					for i = standardArgs+1, inputArgCount do
 						varargs[i-standardArgs] = inputArgs[i]
 					end
-					AmbiguityTracker[varargs] = {nil, inputArgCount-#expr[2]+1}
+					AmbiguityTracker[varargs] = {Nil, inputArgCount-#expr[2]+1}
 					childScope:ML(-1, varargs) -- -1 is the reserved LocalID for local "..."
 				end
 				local ReturnData = executeStatlist(expr[1], childScope)
@@ -376,7 +376,7 @@ local function CreateExecutionLoop(ast)
 			local FinalRhs
 			local function HandleTruncation(i)
 				if i >= #statement[0] then
-					if FinalRhs == nil then
+					if FinalRhs == Nil then
 						FinalRhs = {executeExpression(statement[0][#statement[0]], scope)}
 					end
 					return FinalRhs[i-#statement[0]+1]
