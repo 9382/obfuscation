@@ -23,6 +23,7 @@ local function GenerateRandomString(P1, P2)
 end
 
 local LastVar = {}
+local ProtectedNames = {["if"]=true, ["do"]=true, ["in"]=true, ["as"]=true, _G=true, ["or"]=true, os=true, io=true}
 local function GenerateVariableName()
 	if not RewriterOptions.MinifyVariableNames then
 		return GenerateRandomString()
@@ -34,7 +35,7 @@ local function GenerateVariableName()
 			for _,j in next,LastVar do
 				out = out .. _ValidCharacters:sub(j, j)
 			end
-			if out == "if" or out == "do" or out == "in" or out == "as" or out == "_G" then -- safety
+			if ProtectedNames[out] then -- safety
 				return GenerateVariableName()
 			end
 			return out
