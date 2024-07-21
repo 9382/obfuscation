@@ -73,11 +73,16 @@ local function WriteExpression(Expression, Scope)
 
 	elseif Expression.AstType == "MemberExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
+		local BaseAst = Expression.Base.AstType
+		if BaseAst ~= "VarExpr" and BaseAst ~= "MemberExpr" and BaseAst ~= "IndexExpr" then --Special case for non-standard prefix expressions
+			Base = "(" .. Base .. ")"
+		end
 		return Base .. Expression.Indexer .. Expression.Ident.Data
 
 	elseif Expression.AstType == "IndexExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
-		if Expression.Base.AstType == "ConstructorExpr" then
+		local BaseAst = Expression.Base.AstType
+		if BaseAst ~= "VarExpr" and BaseAst ~= "MemberExpr" and BaseAst ~= "IndexExpr" then --Special case for non-standard prefix expressions
 			Base = "(" .. Base .. ")"
 		end
 		return Base .. "[" .. WriteExpression(Expression.Index, Scope) .. "]"
@@ -85,7 +90,7 @@ local function WriteExpression(Expression, Scope)
 	elseif Expression.AstType == "CallExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
 		local BaseAst = Expression.Base.AstType
-		if BaseAst ~= "VarExpr" and BaseAst ~= "MemberExpr" and BaseAst ~= "IndexExpr" then --Special case for calling values instead of variables
+		if BaseAst ~= "VarExpr" and BaseAst ~= "MemberExpr" and BaseAst ~= "IndexExpr" then --Special case for non-standard prefix expressions
 			Base = "(" .. Base .. ")"
 		end
 		if RewriterOptions.UseShortCallExprs and #Expression.Arguments == 1 then
@@ -107,7 +112,7 @@ local function WriteExpression(Expression, Scope)
 	elseif Expression.AstType == "StringCallExpr" or Expression.AstType == "TableCallExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
 		local BaseAst = Expression.Base.AstType
-		if BaseAst ~= "VarExpr" and BaseAst ~= "MemberExpr" and BaseAst ~= "IndexExpr" then --Special case for calling values instead of variables
+		if BaseAst ~= "VarExpr" and BaseAst ~= "MemberExpr" and BaseAst ~= "IndexExpr" then --Special case for non-standard prefix expressions
 			Base = "(" .. Base .. ")"
 		end
 		local Argument
@@ -358,6 +363,13 @@ WriteStatlist = function(Statlist, DontIndent)
 	for _,Statement in ipairs(Statlist.Body) do
 		local StatementText = StringSplit(WriteStatement(Statement, Scope) .. ConsiderSemicolon(), "\n")
 		for i = 1,#StatementText do
+			--DOESNT WORK, WE LEAK TEXT :(
+			--just redesign this entire system man
+			-- if i > 2 then
+			-- 	if out[i]:gsub("%s*(.+)", "%1"):sub(1, 1) == "(" then
+			-- 		out[i-1] = out[i-1] .. ";"
+			-- 	end
+			-- end
 			out[#out+1] = StatementText[i]
 		end
 	end
