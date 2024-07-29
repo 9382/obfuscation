@@ -704,7 +704,7 @@ def CreateExecutionLoop(code):
 					out.append("else:")
 					ExtendWithBody(out, ExecuteStatlist(statement.orelse, scope))
 			elif OPTION_insert_junk:
-				out.extend(["else:",f"{OPTION_indent_char}pass"])
+				out.extend(["else: pass"] if OPTION_use_semicolons else ["else:",f"{OPTION_indent_char}pass"])
 			return out
 
 		elif stType == ast.While:
@@ -715,7 +715,7 @@ def CreateExecutionLoop(code):
 				out.append("else:")
 				ExtendWithBody(out, ExecuteStatlist(statement.orelse, scope))
 			elif OPTION_insert_junk:
-				out.extend(["else:",f"{OPTION_indent_char}pass"])
+				out.extend(["else: pass"] if OPTION_use_semicolons else ["else:",f"{OPTION_indent_char}pass"])
 			return out
 
 		elif stType in [ast.For, ast.AsyncFor]:
@@ -730,7 +730,7 @@ def CreateExecutionLoop(code):
 				out.append("else:")
 				ExtendWithBody(out, orelse)
 			elif OPTION_insert_junk:
-				out.extend(["else:",f"{OPTION_indent_char}pass"])
+				out.extend(["else: pass"] if OPTION_use_semicolons else ["else:",f"{OPTION_indent_char}pass"])
 			return out
 
 		elif stType in [ast.With, ast.AsyncWith]:
@@ -749,12 +749,12 @@ def CreateExecutionLoop(code):
 				out.append("else:")
 				ExtendWithBody(out, ExecuteStatlist(statement.orelse, scope))
 			elif OPTION_insert_junk:
-				out.extend(["else:",f"{OPTION_indent_char}pass"])
+				out.extend(["else: pass"] if OPTION_use_semicolons else ["else:",f"{OPTION_indent_char}pass"])
 			if len(statement.finalbody) > 0:
 				out.append("finally:")
 				ExtendWithBody(out, ExecuteStatlist(statement.finalbody, scope))
 			elif OPTION_insert_junk:
-				out.extend(["finally:",f"{OPTION_indent_char}pass"])
+				out.extend(["finally: pass"] if OPTION_use_semicolons else ["finally:",f"{OPTION_indent_char}pass"])
 			return out
 
 		elif stType == ast.ExceptHandler:
@@ -838,16 +838,16 @@ def CreateExecutionLoop(code):
 					ExecuteExpression(name, scope)
 			elif type(statement) in [ast.Global, ast.Nonlocal]:
 				ExecuteStatement(statement, scope)
+		if OPTION_insert_junk:
+			for i in range(len(statList), -1, -1):
+				if random.randint(1, 4) == 1:
+					statList.insert(i, GenerateRandomJunk())
+					# Fun fact: You are allowed to put stuff after a break/continue/return for some reason and its not a syntax error
+					# So we don't need to adjust the range used
 		previousWasSimple = False
 		entireBodyWasSimple = True
 		for statement in statList:
 			isSimple = OPTION_use_semicolons and type(statement) in SimpleStatements
-			if OPTION_insert_junk and random.randint(1,4) == 1:
-				out = ExecuteStatement(GenerateRandomJunk(), scope)
-				if type(out) == list:
-					compiledText.extend(out)
-				elif type(out) == str:
-					compiledText.append(out)
 			out = ExecuteStatement(statement, scope)
 			if type(out) == list:
 				compiledText.extend(out)
@@ -937,7 +937,8 @@ def CreateExecutionLoop(code):
 		lambda: ast.If(test=ast.Constant(value=GenerateRandomStr()),body=[ast.Pass()],orelse=[]),
 		lambda: ast.If(
 			test=ast.NamedExpr(target=ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store()),value=ast.Constant(value=0)),
-			body=[ast.Expr(value=ast.Call(func=ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store()),args=[],keywords=[]))],orelse=[]
+			body=[ast.Expr(value=ast.Call(func=ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store()),args=[],keywords=[]))],
+			orelse=[]
 		),
 		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store())],value=ast.Constant(value=random.random())),
 		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store())],value=ast.Constant(value=random.randint(-10,10))),
