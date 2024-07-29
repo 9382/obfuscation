@@ -116,6 +116,15 @@ local function CompileLocalData(Statlist, AssociatedScope)
 		end
 	end
 	for i, Statement in ipairs(Statlist.Body) do
+		if Statement.AstType == "RepeatStatement" then -- hacky fix for the "until" part of a repeat statement
+			local CombinedBody = {}
+			for _, SubStatement in next,Statement.Body.Body do
+				CombinedBody[#CombinedBody+1] = SubStatement
+			end
+			CombinedBody[#CombinedBody+1] = Statement.Condition
+			Statement = {AstType="RepeatStatement", Body={Body=CombinedBody, AstType="Statlist", Scope=Statement.Body.Scope}}
+			-- The actual format of it doesn't have to be correct (mostly), it just needs to have the relevant data
+		end
 		Scope.CurrentStatementN = i
 		local Locals, Bodies = {}, {}
 		GatherLocalsAndBodies(Statement, Locals, Bodies)
