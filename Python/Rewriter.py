@@ -856,19 +856,20 @@ def CreateExecutionLoop(code):
 					ExecuteExpression(name, scope)
 			elif type(statement) in [ast.Global, ast.Nonlocal]:
 				ExecuteStatement(statement, scope)
+		newStatList = list(statList)
 		if OPTION_insert_junk:
 			for i in range(len(statList), -1, -1):
 				# Fun fact: You are allowed to put stuff after a break/continue/return for some reason and its not a syntax error
 				# So we don't need to adjust the range used
 				if OPTION_use_while_for_junk:
 					while random.random() <= OPTION_junk_code_chance:
-						statList.insert(i, GenerateRandomJunk())
+						newStatList.insert(i, GenerateRandomJunk())
 				else:
 					if random.random() <= OPTION_junk_code_chance:
-						statList.insert(i, GenerateRandomJunk())
+						newStatList.insert(i, GenerateRandomJunk())
 		previousWasSimple = False
 		entireBodyWasSimple = True
-		for statement in statList:
+		for statement in newStatList:
 			isSimple = OPTION_use_semicolons and type(statement) in SimpleStatements
 			out = ExecuteStatement(statement, scope)
 			if type(out) == list:
@@ -997,7 +998,8 @@ def CreateExecutionLoop(code):
 			if _DEBUG:
 				afterRun = ast.dump(code)
 				if beforeRun != afterRun:
-					debugprint("[!] The AST has been modified during execution. New AST:",afterRun)
+					debugprint("[!] The AST has been modified during execution. New AST:", afterRun)
+					debugprint("[!} Old AST:", beforeRun)
 			out = "\n".join(out)
 			return out
 
