@@ -36,6 +36,9 @@ OPTION_respect_qualname = True
 # A funny bug encountered during the coding of minimise variables due to a missing return statement, too funny not to keep in. Only applies if minimise variables is enabled
 OPTION_land_of_the_underscores = False
 
+# Uses semicolons for sets of simple expressions to reduce line count
+OPTION_use_semicolons = True
+
 # Enables obscuring of positional arguments. Don't use if positional arguments are sometimes directly referenced, as this may cause errors
 OPTION_obscure_posargs = True
 
@@ -136,6 +139,25 @@ Quite a few areas like Call or Attribute need to be careful on when deciding to 
 The script can't handle class-level nonlocals well, as it attempts to keep the name while also having no correct reference. I am considering this a neccessary evil.
 The alternative would be to evaluate the entire statement list and then go back at the end, and the system as-is can NOT handle that.
 """
+
+SimpleStatements = [ # https://docs.python.org/3.8/reference/simple_stmts.html
+	ast.Expr,
+	ast.Assert,
+	ast.Assign,
+	ast.AugAssign,
+	ast.AnnAssign,
+	ast.Pass,
+	ast.Delete,
+	ast.Return,
+	# ast.Yield, # Handled by ast.Expr
+	ast.Raise,
+	ast.Break,
+	ast.Continue,
+	ast.Import, ast.ImportFrom,
+	# ast.Future, # Not a concept we have, basically just an import
+	ast.Global,
+	ast.Nonlocal,
+]
 
 def CreateExecutionLoop(code):
 	import builtins
@@ -669,14 +691,18 @@ def CreateExecutionLoop(code):
 		elif stType == ast.If:
 			out = []
 			out.append(f"if {ExecuteExpression(statement.test, scope)}:")
-			out.extend(ExecuteStatlist(statement.body, scope))
+			ExtendWithBody(out, ExecuteStatlist(statement.body, scope))
 			if len(statement.orelse) > 0:
 				if OPTION_use_elif and len(statement.orelse) == 1 and type((alternate := statement.orelse[0])) == ast.If:
 					out.append(f"elif {ExecuteExpression(alternate.test, scope)}:")
-					out.extend(ExecuteStatement(alternate, scope)[1:])
+					alternateBody = ExecuteStatement(alternate, scope)
+					alternateBody[0] = alternateBody[0].replace(f"if {ExecuteExpression(alternate.test, scope)}:", "")
+					if alternateBody[0] != "": # the alternate.body is fully inlined by semicolons
+						out[len(out)-1] += alternateBody[0] # Already has a starting space
+					out.extend(alternateBody[1:])
 				else:
 					out.append("else:")
-					out.extend(ExecuteStatlist(statement.orelse, scope))
+					ExtendWithBody(out, ExecuteStatlist(statement.orelse, scope))
 			elif OPTION_insert_junk:
 				out.extend(["else:",f"{OPTION_indent_char}pass"])
 			return out
@@ -684,10 +710,10 @@ def CreateExecutionLoop(code):
 		elif stType == ast.While:
 			out = []
 			out.append(f"while {ExecuteExpression(statement.test, scope)}:")
-			out.extend(ExecuteStatlist(statement.body, scope))
+			ExtendWithBody(out, ExecuteStatlist(statement.body, scope))
 			if len(statement.orelse) > 0:
 				out.append("else:")
-				out.extend(ExecuteStatlist(statement.orelse, scope))
+				ExtendWithBody(out, ExecuteStatlist(statement.orelse, scope))
 			elif OPTION_insert_junk:
 				out.extend(["else:",f"{OPTION_indent_char}pass"])
 			return out
@@ -699,10 +725,10 @@ def CreateExecutionLoop(code):
 			orelse = ExecuteStatlist(statement.orelse, scope)
 			out = []
 			out.append(f"{stType == ast.AsyncFor and 'async ' or ''}for {target} in {iterRange}:")
-			out.extend(body)
+			ExtendWithBody(out, body)
 			if orelse:
 				out.append("else:")
-				out.extend(orelse)
+				ExtendWithBody(out, orelse)
 			elif OPTION_insert_junk:
 				out.extend(["else:",f"{OPTION_indent_char}pass"])
 			return out
@@ -710,23 +736,23 @@ def CreateExecutionLoop(code):
 		elif stType in [ast.With, ast.AsyncWith]:
 			out = []
 			out.append(f"{stType == ast.AsyncWith and 'async ' or ''}with {', '.join(ExecuteExpression(item, scope) for item in statement.items)}:")
-			out.extend(ExecuteStatlist(statement.body, scope))
+			ExtendWithBody(out, ExecuteStatlist(statement.body, scope))
 			return out
 
 		elif stType == ast.Try:
 			out = []
 			out.append("try:")
-			out.extend(ExecuteStatlist(statement.body, scope))
+			ExtendWithBody(out, ExecuteStatlist(statement.body, scope))
 			for handler in statement.handlers:
 				out.extend(ExecuteStatement(handler, scope))
 			if len(statement.orelse) > 0:
 				out.append("else:")
-				out.extend(ExecuteStatlist(statement.orelse, scope))
+				ExtendWithBody(out, ExecuteStatlist(statement.orelse, scope))
 			elif OPTION_insert_junk:
 				out.extend(["else:",f"{OPTION_indent_char}pass"])
 			if len(statement.finalbody) > 0:
 				out.append("finally:")
-				out.extend(ExecuteStatlist(statement.finalbody, scope))
+				ExtendWithBody(out, ExecuteStatlist(statement.finalbody, scope))
 			elif OPTION_insert_junk:
 				out.extend(["finally:",f"{OPTION_indent_char}pass"])
 			return out
@@ -741,7 +767,7 @@ def CreateExecutionLoop(code):
 					out.append(f"except {typeText}:")
 			else:
 				out.append("except:")
-			out.extend(ExecuteStatlist(statement.body, scope))
+			ExtendWithBody(out, ExecuteStatlist(statement.body, scope))
 			return out
 
 		elif stType == ast.Import:
@@ -763,7 +789,7 @@ def CreateExecutionLoop(code):
 				out.append(f"async def {name}({args}){returntype}:")
 			else:
 				out.append(f"def {name}({args}){returntype}:")
-			out.extend(body)
+			ExtendWithBody(out, body)
 			return out
 
 		elif stType == ast.ClassDef:
@@ -780,12 +806,18 @@ def CreateExecutionLoop(code):
 			body = ExecuteStatlist(statement.body, subScope)
 			out.extend(decorators)
 			out.append(f"class {name}({args}):")
-			out.extend(body)
+			ExtendWithBody(out, body)
 			return out
 
 		else:
 			raise ExecutorException(f"[!] Unimplemented statement type {stType}")
 		raise ExecutorException(f"[!] Statement of type {stType} never returned")
+
+	def ExtendWithBody(out, body):
+		if len(body) == 1 and body[0][0] not in " \t": # Entire thing was presumably simple and inlined by semicolons
+			out[len(out)-1] += " " + body[0]
+		else:
+			out.extend(body)
 
 	def ExecuteStatlist(statList, scope, Indent=True):
 		debugprint("Executing statement list...")
@@ -806,7 +838,10 @@ def CreateExecutionLoop(code):
 					ExecuteExpression(name, scope)
 			elif type(statement) in [ast.Global, ast.Nonlocal]:
 				ExecuteStatement(statement, scope)
+		previousWasSimple = False
+		entireBodyWasSimple = True
 		for statement in statList:
+			isSimple = OPTION_use_semicolons and type(statement) in SimpleStatements
 			if OPTION_insert_junk and random.randint(1,4) == 1:
 				out = ExecuteStatement(GenerateRandomJunk(), scope)
 				if type(out) == list:
@@ -817,13 +852,18 @@ def CreateExecutionLoop(code):
 			if type(out) == list:
 				compiledText.extend(out)
 			elif type(out) == str:
-				compiledText.append(out)
+				if isSimple and previousWasSimple:
+					compiledText[len(compiledText)-1] += "; " + out
+				else:
+					compiledText.append(out)
 			elif out == None:
 				pass
 			else:
 				debugprint(":( poor type return to statlist",type(out))
 				compiledText.append(str(out))
-		if Indent:
+			previousWasSimple = isSimple
+			entireBodyWasSimple = entireBodyWasSimple and isSimple
+		if Indent and not entireBodyWasSimple:
 			IndentChar = OPTION_variable_indentation and (
 				random.randint(1, 4)==1 and "\t"*random.randint(1, 2) or " "*random.randint(1, 6) # Yes, this is legal indentation logic
 			) or OPTION_indent_char

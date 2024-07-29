@@ -88,6 +88,33 @@ print("IfExp1", 1 if True else 2 if True else 3 if True else 4)
 print("IfExp2", 1 if True else 2 if False else 3 if True else 4)
 print("IfExp3", (1 if True else 2) if False else (3 if True else 4))
 
+## A lot of if, elif, and else
+if True:
+	if True: print("a")
+	elif True: print("b")
+	elif True: print("c")
+	else: print("d")
+elif True:
+	if True: print("e")
+	elif True: print("f")
+	else: print("g")
+else:
+	if True: print("h")
+	else: print("i")
+
+if True:
+	def p1(): pass
+	print("a"); print("b")
+	def p1_2(): pass
+elif True:
+	def p2(): pass
+	print("c"); print("d")
+	def p2_2(): pass
+else:
+	def p3(): pass
+	print("e"); print("f")
+	def p3_2(): pass
+
 ## Testing a with clause (makes files)
 try:
 	crash()
