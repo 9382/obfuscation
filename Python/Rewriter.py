@@ -541,10 +541,12 @@ def PerformASTManipulation(AST):
 	WrapperTrueConditionLines = [
 		lambda: ast.NamedExpr(target=ast.Name(id=GenerateRandomStr(),ctx=ast.Store()),value=ast.Constant(value=random.randint(1,10))),
 		lambda: ast.Constant(value=GenerateRandomStr()),
+		lambda: ast.Constant(value=True),
 	]
 	WrapperFalseConditionLines = [
 		lambda: ast.NamedExpr(target=ast.Name(id=GenerateRandomStr(),ctx=ast.Store()),value=ast.Constant(value=0)),
 		lambda: ast.Constant(value=""),
+		lambda: ast.Constant(value=False),
 		lambda: ast.Constant(value=None),
 	]
 	def GetWrapperTest():
