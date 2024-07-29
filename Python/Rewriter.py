@@ -44,6 +44,7 @@ OPTION_obscure_posargs = True
 
 # Occassionally inserts a bit of garbage (code that does, quite literally, nothing)
 OPTION_insert_junk = False
+OPTION_junk_code_chance = 1/4
 
 # Adds useless annotation markers, E.g. x: int or def y() -> int:
 OPTION_add_useless_annotations = True
@@ -840,7 +841,7 @@ def CreateExecutionLoop(code):
 				ExecuteStatement(statement, scope)
 		if OPTION_insert_junk:
 			for i in range(len(statList), -1, -1):
-				if random.randint(1, 4) == 1:
+				if random.random() <= OPTION_junk_code_chance:
 					statList.insert(i, GenerateRandomJunk())
 					# Fun fact: You are allowed to put stuff after a break/continue/return for some reason and its not a syntax error
 					# So we don't need to adjust the range used
