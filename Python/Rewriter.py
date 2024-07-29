@@ -1,3 +1,16 @@
+""" TODO
+
+Right now a lot of our "obscuring" stuff is applied under arbitrary rules instead of the rules of the rewriter
+We really should be modifying the AST and then letting the text writer just see to it that everything is written correctly
+Luckily scopes aren't part of the AST at all and are instead fully made by us, so we don't have to properly manage much
+
+Junk code needs to be more dynamic and contain actual real code inside guaranteed-true statements
+This means behaviourally-off if statements can't just be blanket removed as definitely useless
+Luckily this isn't lua, so I don't think we run into any scoping violations because of this
+(This'll likely require proper AST manipulation too)
+
+"""
+
 import random
 import sys
 import ast
