@@ -45,6 +45,9 @@ OPTION_obscure_posargs = True
 # Occassionally inserts a bit of garbage (code that does, quite literally, nothing)
 OPTION_insert_junk = False
 OPTION_junk_code_chance = 1/4
+# Alternate version of junk code creation that can generate multiple junk in a row
+# dont use a probability less than around 1/1.7 or there will be infinite recursion errors
+OPTION_use_while_for_junk = True
 
 # Adds useless annotation markers, E.g. x: int or def y() -> int:
 OPTION_add_useless_annotations = True
@@ -841,10 +844,14 @@ def CreateExecutionLoop(code):
 				ExecuteStatement(statement, scope)
 		if OPTION_insert_junk:
 			for i in range(len(statList), -1, -1):
-				if random.random() <= OPTION_junk_code_chance:
-					statList.insert(i, GenerateRandomJunk())
-					# Fun fact: You are allowed to put stuff after a break/continue/return for some reason and its not a syntax error
-					# So we don't need to adjust the range used
+				# Fun fact: You are allowed to put stuff after a break/continue/return for some reason and its not a syntax error
+				# So we don't need to adjust the range used
+				if OPTION_use_while_for_junk:
+					while random.random() <= OPTION_junk_code_chance:
+						statList.insert(i, GenerateRandomJunk())
+				else:
+					if random.random() <= OPTION_junk_code_chance:
+						statList.insert(i, GenerateRandomJunk())
 		previousWasSimple = False
 		entireBodyWasSimple = True
 		for statement in statList:
