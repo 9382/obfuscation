@@ -393,7 +393,8 @@ def CreateExecutionLoop(code):
 			if type(expr.value) == str:
 				if OPTION_obscure_strings:
 					JoinVar = GenerateSmallestStr()
-					return f"str().join(chr({JoinVar}) for {JoinVar} in [" + ",".join(str(ord(x)) for x in expr.value) + "])"
+					offset = random.randint(-5,5)
+					return f"str().join(chr({JoinVar}+{offset}) for {JoinVar} in [" + ",".join(str(ord(x)-offset) for x in expr.value) + "])"
 				if ShouldWrap:
 					out = WrapInQuotes(expr.value).replace("\n","\\n").replace("\0", "\\0")
 					if OPTION_insert_junk:
