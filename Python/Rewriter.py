@@ -255,7 +255,7 @@ def CreateExecutionLoop(code):
 			if lastVar[i] != len(_RandomCharacters)-1:
 				lastVar[i] = lastVar[i] + 1
 				out = str().join(_RandomCharacters[c] for c in lastVar)
-				if out in ["if", "do", "in", "as"]:
+				if out in ["if", "do", "in", "as", "is"]:
 					return GenerateSmallestStr() #just be a bit careful
 				return out #(This missing line is the origin of land of the underscores)
 			else:
