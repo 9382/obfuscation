@@ -852,7 +852,7 @@ def CreateExecutionLoop(code):
 			if type(out) == list:
 				compiledText.extend(out)
 			elif type(out) == str:
-				if isSimple and previousWasSimple:
+				if isSimple and previousWasSimple and len(compiledText) > 0:
 					compiledText[len(compiledText)-1] += "; " + out
 				else:
 					compiledText.append(out)
