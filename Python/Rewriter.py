@@ -999,7 +999,6 @@ def CreateExecutionLoop(code):
 				if beforeRun != afterRun:
 					debugprint("[!] The AST has been modified during execution. New AST:",afterRun)
 			out = "\n".join(out)
-			debugprint(out)
 			return out
 
 	return __main__
