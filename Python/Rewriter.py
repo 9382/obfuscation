@@ -1,16 +1,3 @@
-""" TODO
-
-Right now a lot of our "obscuring" stuff is applied under arbitrary rules instead of the rules of the rewriter
-We really should be modifying the AST and then letting the text writer just see to it that everything is written correctly
-Luckily scopes aren't part of the AST at all and are instead fully made by us, so we don't have to properly manage much
-
-Junk code needs to be more dynamic and contain actual real code inside guaranteed-true statements
-This means behaviourally-off if statements can't just be blanket removed as definitely useless
-Luckily this isn't lua, so I don't think we run into any scoping violations because of this
-(This'll likely require proper AST manipulation too)
-
-"""
-
 import random
 import sys
 import ast
@@ -56,10 +43,11 @@ OPTION_use_semicolons = True
 OPTION_obscure_posargs = True
 
 # Occassionally inserts a bit of garbage (code that does, quite literally, nothing)
+# Don't use a probability less than around 1/2.1 or there will be infinite recursion errors
 OPTION_insert_junk = False
 OPTION_junk_code_chance = 1/4
 # Alternate version of junk code creation that can generate multiple junk in a row
-# dont use a probability less than around 1/1.7 or there will be infinite recursion errors
+# Don't use a probability less than around 1/3.1 or there will be infinite recursion errors
 OPTION_use_while_for_junk = True
 
 # Adds useless annotation markers, E.g. x: int or def y() -> int:
@@ -176,6 +164,424 @@ SimpleStatements = [ # https://docs.python.org/3.8/reference/simple_stmts.html
 	ast.Nonlocal,
 ]
 
+class ExecutorException(Exception):
+	pass
+
+def PerformASTManipulation(AST):
+	# DO NOT DO VARIABLE NAMES HERE. Thats for the writer to handle. We want to avoid any scope related logic here
+	_DEBUG_LastExpr = None
+	_DEBUG_LastStatement = None
+
+	def ConvertInto(Object, NewObject):
+		# A cursed method to replace an object with another by modifying the object itself instead of the object that references it
+		assert isinstance(Object, ast.AST) and isinstance(NewObject, ast.AST)
+		Object.__class__ = NewObject.__class__
+		setattr(Object, "_fields", NewObject._fields)
+		for field in Object._fields:
+			if hasattr(Object, field):
+				delattr(Object, field)
+		for field in NewObject._fields:
+			if hasattr(NewObject, field):
+				setattr(Object, field, getattr(NewObject, field))
+
+	_RandomCharacters = ["_"]
+	if not (OPTION_minimise_variables and OPTION_land_of_the_underscores):
+		for i in range(65, 91):
+			_RandomCharacters.append(chr(i))
+		for i in range(97, 123):
+			_RandomCharacters.append(chr(i))
+	def GenerateRandomStr(length=None):
+		if length == None:
+			length = random.randint(10,30)
+		randomStr = ""
+		for i in range(length):
+			randomStr += random.choice(_RandomCharacters)
+		return randomStr
+
+	def MangleStringConstant(expr):
+		value = expr.value
+		offset = random.randint(-10,10)
+		genVar = GenerateRandomStr(6)
+		newExpr = ast.Call(
+			func=ast.Attribute(value=ast.Call(func=ast.Name(id="str", ctx=ast.Load()), args=[], keywords=[]), attr="join", ctx=ast.Load()),
+			args=[ast.ListComp(
+				elt=ast.Call(func=ast.Name(id="chr", ctx=ast.Load()), args=[ast.BinOp(left=ast.Name(id=genVar, ctx=ast.Load()), op=ast.Add(), right=ast.Constant(value=offset))], keywords=[]),
+				generators=[ast.comprehension(target=ast.Name(id=genVar, ctx=ast.Store()), iter=ast.List(elts=[ast.Constant(value=ord(x)-offset) for x in value], ctx=ast.Load()), ifs=[], is_async=0)]
+			)],
+			keywords=[]
+		)
+		ModifyExpression(newExpr) # Cause mangled numbers in our mangled string constants sound fun
+		ConvertInto(expr, newExpr)
+
+	def MangleNumberConstant(expr):
+		number = expr.value
+		method = random.randint(0, 2)
+		if method == 0:
+			offset = random.randint(-100, 100)
+			ConvertInto(expr, ast.BinOp(
+				left=ast.Constant(value=number-offset),
+				op=ast.Add(),
+				right=ast.Constant(value=offset)
+			))
+		elif method == 1:
+			offset = random.randint(0, 20)
+			ConvertInto(expr, ast.BinOp(
+				left=ast.Constant(value=number-offset),
+				op=ast.Add(),
+				right=ast.Call(func=ast.Name(id="len", ctx=ast.Load()), args=[ast.Constant(value=GenerateRandomStr(offset))], keywords=[])
+			))
+		elif method == 2: #Method 1 but abuses tuples
+			ConvertInto(expr, ast.BinOp(
+				left=ast.Constant(value=number-1),
+				op=ast.Add(),
+				right=ast.Call(func=ast.Name(id="len", ctx=ast.Load()), args=[ast.Tuple(elts=[ast.Constant(value=GenerateRandomStr(random.randint(0, 20)))])], keywords=[])
+			))
+
+	def ModifyExpression(expr, *, PreventFormat=False):
+		nonlocal _DEBUG_LastExpr
+		_DEBUG_LastExpr = expr
+		exprType = type(expr)
+		debugprint("Modifying expression...",exprType)
+
+		if exprType == ast.Constant:
+			# No sub-expressions here
+			if type(expr.value) == str:
+				if OPTION_obscure_strings and not PreventFormat:
+					MangleStringConstant(expr)
+			elif type(expr.value) == int or type(expr.value) == float:
+				if OPTION_obscure_numbers:
+					MangleNumberConstant(expr)
+
+		elif exprType == ast.Name:
+			pass # No sub-expressions here
+
+		elif exprType == ast.NamedExpr:
+			ModifyExpression(expr.target)
+			ModifyExpression(expr.value)
+
+		elif exprType == ast.Starred:
+			ModifyExpression(expr.value)
+
+		elif exprType == ast.Attribute:
+			ModifyExpression(expr.value)
+
+		elif exprType == ast.JoinedStr:
+			for value in expr.values:
+				ModifyExpression(value, PreventFormat=True)
+
+		elif exprType == ast.FormattedValue:
+			ModifyExpression(expr.value)
+			if expr.format_spec:
+				ModifyExpression(expr.format_spec, PreventFormat=True)
+
+		elif exprType == ast.keyword:
+			ModifyExpression(expr.value)
+
+		elif exprType == ast.alias:
+			pass # No sub-expressions here
+
+		elif exprType == ast.withitem:
+			ModifyExpression(expr.context_expr)
+			ModifyExpression(expr.optional_vars)
+
+		elif exprType in [ast.Tuple, ast.List, ast.Set]:
+			for entry in expr.elts:
+				ModifyExpression(entry)
+
+		elif exprType == ast.Dict:
+			for i in range(len(expr.keys)):
+				key, value = expr.keys[i], expr.values[i]
+				ModifyExpression(value)
+				if key != None:
+					ModifyExpression(key)
+
+		elif exprType in [ast.ListComp, ast.SetComp, ast.GeneratorExp]:
+			ModifyGenerators(expr.generators)
+			ModifyExpression(expr.elt)
+
+		elif exprType == ast.DictComp:
+			ModifyGenerators(expr.generators)
+			ModifyExpression(expr.key)
+			ModifyExpression(expr.value)
+
+		elif exprType == ast.Index:
+			ModifyExpression(expr.value)
+
+		elif exprType == ast.Slice:
+			if expr.lower:
+				ModifyExpression(expr.lower)
+			if expr.upper:
+				ModifyExpression(expr.upper)
+			if expr.step:
+				ModifyExpression(expr.step)
+
+		elif exprType == ast.Subscript:
+			ModifyExpression(expr.value)
+			ModifyExpression(expr.slice)
+
+		elif exprType == ast.BoolOp:
+			for subExpr in expr.values:
+				ModifyExpression(subExpr)
+
+		elif exprType == ast.UnaryOp:
+			ModifyExpression(expr.operand)
+
+		elif exprType == ast.BinOp:
+			ModifyExpression(expr.left)
+			ModifyExpression(expr.right)
+
+		elif exprType == ast.Compare:
+			ModifyExpression(expr.left)
+			for comparator in expr.comparators:
+				ModifyExpression(comparator)
+
+		elif exprType == ast.IfExp:
+			ModifyExpression(expr.body)
+			ModifyExpression(expr.test)
+			ModifyExpression(expr.orelse)
+
+		elif exprType == ast.Call:
+			ModifyExpression(expr.func)
+			for arg in expr.args:
+				ModifyExpression(arg)
+			for kwarg in expr.keywords:
+				ModifyExpression(kwarg)
+
+		elif exprType == ast.Await:
+			ModifyExpression(expr.value)
+
+		elif exprType == ast.Lambda:
+			ModifyArgs(expr.args)
+			ModifyExpression(expr.body)
+
+		elif exprType == ast.Yield:
+			ModifyExpression(expr.value)
+
+		elif exprType == ast.YieldFrom:
+			ModifyExpression(expr.value)
+
+		else:
+			raise ExecutorException(f"[!] Unimplemented expression type {exprType}")
+
+	#Fun fact: `obj: obj = "somevalue"` is valid even though obj was previously undefined, because annotation magic
+	AnnotationTypes = ["int", "str", "float", "list", "dict", "None"]
+	def ModifyStatement(statement):
+		nonlocal _DEBUG_LastStatement
+		_DEBUG_LastStatement = statement
+		stType = type(statement)
+		debugprint("Modifying statement...",stType)
+
+		if stType == ast.Expr:
+			if OPTION_ignore_docstrings and type(statement.value) == ast.Constant:
+				return
+			ModifyExpression(statement.value)
+
+		elif stType == ast.Assign:
+			ModifyExpression(statement.value)
+			for target in statement.targets:
+				ModifyExpression(target)
+
+		elif stType == ast.AnnAssign:
+			ModifyExpression(statement.target)
+			ModifyExpression(statement.annotation)
+			if statement.value:
+				ModifyExpression(statement.value)
+
+		elif stType == ast.AugAssign:
+			ModifyExpression(statement.value)
+			ModifyExpression(statement.target)
+
+		elif stType == ast.Assert:
+			ModifyExpression(statement.test)
+			if statement.msg:
+				ModifyExpression(statement.msg)
+
+		elif stType == ast.Raise:
+			if statement.exc:
+				ModifyExpression(statement.exc)
+				if statement.cause:
+					ModifyExpression(statement.cause)
+
+		elif stType == ast.Global:
+			pass # No sub-expressions here
+
+		elif stType == ast.Nonlocal:
+			pass # No sub-expressions here
+
+		elif stType == ast.Delete:
+			pass # No sub-expressions here
+
+		elif stType == ast.Return:
+			if statement.value:
+				ModifyExpression(statement.value)
+
+		elif stType == ast.Pass:
+			pass # No sub-expressions here
+
+		elif stType == ast.Break:
+			pass # No sub-expressions here
+
+		elif stType == ast.Continue:
+			pass # No sub-expressions here
+
+		elif stType == ast.If:
+			ModifyExpression(statement.test)
+			ModifyStatlist(statement.body)
+			ModifyStatlist(statement.orelse)
+
+		elif stType == ast.While:
+			ModifyExpression(statement.test)
+			ModifyStatlist(statement.body)
+			ModifyStatlist(statement.orelse)
+
+		elif stType in [ast.For, ast.AsyncFor]:
+			ModifyExpression(statement.iter)
+			ModifyExpression(statement.target)
+			ModifyStatlist(statement.body)
+			ModifyStatlist(statement.orelse)
+
+		elif stType in [ast.With, ast.AsyncWith]:
+			for item in statement.items:
+				ModifyExpression(item)
+			ModifyStatlist(statement.body)
+
+		elif stType == ast.Try:
+			ModifyStatlist(statement.body)
+			for handler in statement.handlers:
+				ModifyStatement(handler)
+			ModifyStatlist(statement.orelse)
+			ModifyStatlist(statement.finalbody)
+
+		elif stType == ast.ExceptHandler:
+			if statement.type:
+				ModifyExpression(statement.type)
+			ModifyStatlist(statement.body)
+
+		elif stType == ast.Import:
+			for entry in statement.names:
+				ModifyExpression(entry)
+
+		elif stType == ast.ImportFrom:
+			for entry in statement.names:
+				ModifyExpression(entry)
+
+		elif stType == ast.FunctionDef or stType == ast.AsyncFunctionDef:
+			ModifyObjectDecorators(statement.decorator_list)
+			ModifyArgs(statement.args)
+			ModifyStatlist(statement.body)
+
+		elif stType == ast.ClassDef:
+			ModifyObjectDecorators(statement.decorator_list)
+			for base in statement.bases:
+				ModifyExpression(base)
+			for keyword in statement.keywords:
+				ModifyExpression(keyword)
+			ModifyStatlist(statement.body)
+
+		else:
+			raise ExecutorException(f"[!] Unimplemented statement type {stType}")
+
+	def ModifyStatlist(statList):
+		debugprint("Modifying statement list...")
+		if OPTION_insert_junk:
+			# Junk insert round 1 - insert useless code
+			for i in range(len(statList), -1, -1):
+				# Fun fact: You are allowed to put stuff after a break/continue/return for some reason and its not a syntax error
+				# So we don't need to adjust the range used
+				while random.random() <= OPTION_junk_code_chance:
+					statList.insert(i, random.choice(JunkLines)())
+					if not OPTION_use_while_for_junk:
+						break
+			# Junk insert round 2 - wrap random (probably valid) code in ifs or elses
+			if len(statList) > 1:
+				startPoint = random.randint(0, len(statList)-1)
+				endPoint = random.randint(startPoint, len(statList)-1) + 1
+				while len(statList) > 1 and endPoint != len(statList):
+					temporaryCopy = list(statList)
+					statList.clear()
+					statList.extend(temporaryCopy[:startPoint])
+					realBody = temporaryCopy[startPoint:endPoint]
+					fakeBody = [random.choice(JunkLines)()]
+					condition, isTrue = GetWrapperTest()
+					statList.append(ast.If(
+						test=condition,
+						body=isTrue and realBody or fakeBody,
+						orelse=isTrue and fakeBody or realBody,
+					))
+					statList.extend(temporaryCopy[endPoint:])
+					startPoint = random.randint(startPoint+1, len(statList)-1)
+					endPoint = random.randint(startPoint, len(statList)-1) + 1
+					if not OPTION_use_while_for_junk:
+						break
+		if len(statList) == 0 and OPTION_insert_junk:
+			statList.append(ast.Pass())
+		for statement in statList:
+			ModifyStatement(statement)
+
+	def ModifyArgs(arguments):
+		#Positionals
+		for default in arguments.defaults:
+			ModifyExpression(default)
+		#Keyword args
+		for default in arguments.kw_defaults:
+			if default != None:
+				ModifyExpression(default)
+
+	def ModifyObjectDecorators(decorators):
+		for decorator in decorators:
+			ModifyExpression(decorator)
+
+	def ModifyGenerators(generators):
+		for generator in generators:
+			ModifyExpression(generator.iter)
+			ModifyExpression(generator.target)
+			for conditional in generator.ifs:
+				ModifyExpression(conditional)
+
+	WrapperTrueConditionLines = [
+		lambda: ast.NamedExpr(target=ast.Name(id=GenerateRandomStr(),ctx=ast.Store()),value=ast.Constant(value=random.randint(1,10))),
+		lambda: ast.Constant(value=GenerateRandomStr()),
+	]
+	WrapperFalseConditionLines = [
+		lambda: ast.NamedExpr(target=ast.Name(id=GenerateRandomStr(),ctx=ast.Store()),value=ast.Constant(value=0)),
+		lambda: ast.Constant(value=GenerateRandomStr(0)),
+		lambda: ast.Constant(value=None),
+	]
+	def GetWrapperTest():
+		return (random.choice(WrapperTrueConditionLines)(), True) if random.randint(1, 2) == 1 else (random.choice(WrapperFalseConditionLines)(), False)
+
+	JunkLines = [
+		lambda: ast.While(test=ast.Constant(value=GenerateRandomStr()),body=[ast.Break()],orelse=[]),
+		lambda: ast.Pass(),
+		lambda: ast.If(test=ast.Constant(value=GenerateRandomStr()),body=[ast.Pass()],orelse=[]),
+		lambda: ast.If(
+			test=ast.NamedExpr(target=ast.Name(id=GenerateRandomStr(),ctx=ast.Store()),value=ast.Constant(value=0)),
+			body=[ast.Expr(value=ast.Call(func=ast.Name(id=GenerateRandomStr(),ctx=ast.Store()),args=[],keywords=[]))],
+			orelse=[]
+		),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.Constant(value=random.random())),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.Constant(value=random.randint(-10,10))),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.Constant(value="")),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.List(elts=[],ctx=ast.Load())),
+		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(),ctx=ast.Store())],value=ast.Dict(keys=[],values=[])),
+	]
+
+	try:
+		ModifyStatlist(AST.body)
+	except BaseException as exc:
+		if _DEBUG:
+			debugprint("[!] We ran into a critical error")
+			if _DEBUG_LastExpr:
+				debugprint("Last expression:",ast.dump(_DEBUG_LastExpr))
+			else:
+				debugprint("Last expression: None")
+			if _DEBUG_LastStatement:
+				debugprint("Last statement:",ast.dump(_DEBUG_LastStatement))
+			else:
+				debugprint("Last statement: None")
+		raise exc
+
+
 def CreateExecutionLoop(code):
 	import builtins
 	class VariableScope:
@@ -250,14 +656,6 @@ def CreateExecutionLoop(code):
 				self.VarMapping[var] = self.Parent.getVar(var)
 				self.NonLocals.add(var)
 
-	class ReturnStatement:
-		def __init__(self, Type, Data=None):
-			self.Type = Type
-			self.Data = Data
-
-	class ExecutorException(Exception):
-		pass
-
 	_RandomCharacters = ["_"]
 	if not (OPTION_minimise_variables and OPTION_land_of_the_underscores):
 		for i in range(65, 91):
@@ -271,7 +669,7 @@ def CreateExecutionLoop(code):
 			if lastVar[i] != len(_RandomCharacters)-1:
 				lastVar[i] = lastVar[i] + 1
 				out = str().join(_RandomCharacters[c] for c in lastVar)
-				if out in ["if", "do", "in", "as", "is"]:
+				if out in ["if", "do", "in", "as", "is", "or"]:
 					return GenerateSmallestStr() #just be a bit careful
 				return out #(This missing line is the origin of land of the underscores)
 			else:
@@ -281,7 +679,7 @@ def CreateExecutionLoop(code):
 	def GenerateRandomStr(length=None, ForVariable=False):
 		if OPTION_minimise_variables and ForVariable:
 			return GenerateSmallestStr()
-		if not length:
+		if length == None:
 			length = random.randint(20,40)
 		randomStr = ""
 		for i in range(length):
@@ -312,22 +710,6 @@ def CreateExecutionLoop(code):
 			return f'"{newString}"'
 		else:
 			return f"'{newString}'"
-
-	def MangleNumber(number):
-		if not OPTION_obscure_numbers:
-			return str(number)
-		method = random.randint(0, 3)
-		if method == 0:
-			offset = random.randint(-100, 100)
-			return f"({number-offset}+{offset})"
-		elif method == 1:
-			offset = random.randint(1, 20)
-			return f"({number-offset}+len(('{GenerateRandomStr(offset)}')))"
-		elif method == 2:
-			offset = random.randint(1, 20)
-			return f"({number+offset}+-len(('{GenerateRandomStr(offset)}')))"
-		elif method == 3: #Method 1/2 but abuses tuples
-			return f"({number-1}+len(('{GenerateRandomStr()}',)))"
 
 	def ParseOperator(op):
 		op = type(op)
@@ -404,21 +786,15 @@ def CreateExecutionLoop(code):
 
 		if exprType == ast.Constant:
 			if type(expr.value) == str:
-				if OPTION_obscure_strings:
-					JoinVar = GenerateSmallestStr()
-					offset = random.randint(-5,5)
-					return f"str().join(chr({JoinVar}+{offset}) for {JoinVar} in [" + ",".join(str(ord(x)-offset) for x in expr.value) + "])"
 				if ShouldWrap:
 					out = WrapInQuotes(expr.value).replace("\n","\\n").replace("\0", "\\0")
 					if OPTION_insert_junk:
 						return out + "[::]"
 					else:
 						return out
-				else:
-					expr.value.replace("\n","\\n")
-			elif type(expr.value) == int or type(expr.value) == float:
-				return MangleNumber(expr.value)
-			return str(expr.value)
+				return expr.value
+			else:
+				return str(expr.value)
 
 		elif exprType == ast.Name:
 			scopemethod = (type(expr.ctx) == ast.Store) and scope.createVar or scope.getVar
@@ -856,20 +1232,9 @@ def CreateExecutionLoop(code):
 					ExecuteExpression(name, scope)
 			elif type(statement) in [ast.Global, ast.Nonlocal]:
 				ExecuteStatement(statement, scope)
-		newStatList = list(statList)
-		if OPTION_insert_junk:
-			for i in range(len(statList), -1, -1):
-				# Fun fact: You are allowed to put stuff after a break/continue/return for some reason and its not a syntax error
-				# So we don't need to adjust the range used
-				if OPTION_use_while_for_junk:
-					while random.random() <= OPTION_junk_code_chance:
-						newStatList.insert(i, GenerateRandomJunk())
-				else:
-					if random.random() <= OPTION_junk_code_chance:
-						newStatList.insert(i, GenerateRandomJunk())
 		previousWasSimple = False
 		entireBodyWasSimple = True
-		for statement in newStatList:
+		for statement in statList:
 			isSimple = OPTION_use_semicolons and type(statement) in SimpleStatements
 			out = ExecuteStatement(statement, scope)
 			if type(out) == list:
@@ -954,27 +1319,12 @@ def CreateExecutionLoop(code):
 			terms.append(out)
 		return " ".join(terms)
 
-	JunkLines = [
-		lambda: ast.While(test=ast.Constant(value=GenerateRandomStr()),body=[ast.Break()],orelse=[]),
-		lambda: ast.Pass(),
-		lambda: ast.If(test=ast.Constant(value=GenerateRandomStr()),body=[ast.Pass()],orelse=[]),
-		lambda: ast.If(
-			test=ast.NamedExpr(target=ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store()),value=ast.Constant(value=0)),
-			body=[ast.Expr(value=ast.Call(func=ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store()),args=[],keywords=[]))],
-			orelse=[]
-		),
-		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store())],value=ast.Constant(value=random.random())),
-		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store())],value=ast.Constant(value=random.randint(-10,10))),
-		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store())],value=ast.Constant(value="")),
-		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store())],value=ast.List(elts=[],ctx=ast.Load())),
-		lambda: ast.Assign(targets=[ast.Name(id=GenerateRandomStr(ForVariable=True),ctx=ast.Store())],value=ast.Dict(keys=[],values=[])),
-	]
-	def GenerateRandomJunk():
-		return random.choice(JunkLines)()
-
 	def __main__():
 		scope = VariableScope(None, "core")
 		debugprint("Input code:",code)
+		debugprint("Performing AST Manipulation...")
+		PerformASTManipulation(code)
+		debugprint("Writing AST...")
 		if _DEBUG:
 			beforeRun = ast.dump(code)
 		try:
