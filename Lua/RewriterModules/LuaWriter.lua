@@ -47,7 +47,7 @@ end
 
 -- Expressions that don't require bracketing to count as valid prefix expressions
 -- prefixexp ::= var | functioncall | `(´ exp `)´
-local StandardPrefixExpressions = {VarExpr=true, MemberExpr=true, IndexExpr=true, CallExpr=true}
+local StandardPrefixExpressions = {VarExpr=true, MemberExpr=true, IndexExpr=true, CallExpr=true, StringCallExpr=true, TableCallExpr=true}
 
 local WriteStatlist
 local function WriteExpression(Expression, Scope)
