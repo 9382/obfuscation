@@ -45,6 +45,10 @@ local function CompileWithFormattingData(Lines)
 	end
 end
 
+-- Expressions that don't require bracketing to count as valid prefix expressions
+-- prefixexp ::= var | functioncall | `(´ exp `)´
+local StandardPrefixExpressions = {VarExpr=true, MemberExpr=true, IndexExpr=true, CallExpr=true}
+
 local WriteStatlist
 local function WriteExpression(Expression, Scope)
 	Expression.ParenCount = Expression.ParenCount or 0
@@ -74,7 +78,7 @@ local function WriteExpression(Expression, Scope)
 	elseif Expression.AstType == "MemberExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
 		local BaseAst = Expression.Base.AstType
-		if BaseAst ~= "VarExpr" and BaseAst ~= "MemberExpr" and BaseAst ~= "IndexExpr" then --Special case for non-standard prefix expressions
+		if not StandardPrefixExpressions[BaseAst] then --Special case for non-standard prefix expressions
 			Base = "(" .. Base .. ")"
 		end
 		return Base .. Expression.Indexer .. Expression.Ident.Data
@@ -82,7 +86,7 @@ local function WriteExpression(Expression, Scope)
 	elseif Expression.AstType == "IndexExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
 		local BaseAst = Expression.Base.AstType
-		if BaseAst ~= "VarExpr" and BaseAst ~= "MemberExpr" and BaseAst ~= "IndexExpr" then --Special case for non-standard prefix expressions
+		if not StandardPrefixExpressions[BaseAst] then --Special case for non-standard prefix expressions
 			Base = "(" .. Base .. ")"
 		end
 		return Base .. "[" .. WriteExpression(Expression.Index, Scope) .. "]"
@@ -90,7 +94,7 @@ local function WriteExpression(Expression, Scope)
 	elseif Expression.AstType == "CallExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
 		local BaseAst = Expression.Base.AstType
-		if BaseAst ~= "VarExpr" and BaseAst ~= "MemberExpr" and BaseAst ~= "IndexExpr" then --Special case for non-standard prefix expressions
+		if not StandardPrefixExpressions[BaseAst] then --Special case for non-standard prefix expressions
 			Base = "(" .. Base .. ")"
 		end
 		if RewriterOptions.UseShortCallExprs and #Expression.Arguments == 1 then
@@ -112,7 +116,7 @@ local function WriteExpression(Expression, Scope)
 	elseif Expression.AstType == "StringCallExpr" or Expression.AstType == "TableCallExpr" then
 		local Base = WriteExpression(Expression.Base, Scope)
 		local BaseAst = Expression.Base.AstType
-		if BaseAst ~= "VarExpr" and BaseAst ~= "MemberExpr" and BaseAst ~= "IndexExpr" then --Special case for non-standard prefix expressions
+		if not StandardPrefixExpressions[BaseAst] then --Special case for non-standard prefix expressions
 			Base = "(" .. Base .. ")"
 		end
 		local Argument
