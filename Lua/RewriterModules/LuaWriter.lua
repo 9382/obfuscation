@@ -385,5 +385,5 @@ return function(AST, Options)
 	RewriterOptions = Options
 	CommaSplitter = (RewriterOptions.AddExtraSpacing and ", " or ",")
 	EqualsSplitter = (RewriterOptions.AddExtraSpacing and " = " or "=")
-	return WriteStatlist(AST, true)
+	return CompileWithFormattingData(WriteStatlist(AST, true))
 end

@@ -90,10 +90,6 @@ local function Main(C)
 		return false,p
 	end
 
-	if not RewriterOptions.UseNewlines and not RewriterOptions.UseSemicolons then
-		print("WARNING: Semicolons should really be used when no newlines are present")
-	end
-
 	if RewriterOptions.MinifyVariableNames and RewriterOptions.AggressivelyMinifyVariables and RewriterOptions.PerformCodeFlattening then
 		print("WARNING: Aggressive variable minification has little effect when flattening code")
 	end
@@ -114,13 +110,13 @@ local function Main(C)
 		RenameVariables(p, RewriterOptions)
 	end
 
-	local lines = LuaWriter(p, RewriterOptions)
+	local out = LuaWriter(p, RewriterOptions)
 
 	if RewriterOptions.CenterAlignedCode then
-		FunnyStuff(lines, RewriterOptions)
+		out = FunnyStuff(out, RewriterOptions)
 	end
 
-	return true, table.concat(lines,"\n")
+	return true, out
 end
 
 print(select(2, Main([==[
