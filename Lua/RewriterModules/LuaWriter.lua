@@ -366,14 +366,10 @@ WriteStatlist = function(Statlist, DontIndent)
 	local out = {}
 	for _,Statement in ipairs(Statlist.Body) do
 		local StatementText = StringSplit(WriteStatement(Statement, Scope) .. ConsiderSemicolon(), "\n")
+		if #out > 0 and StatementText[1]:sub(1, 1) == "(" and out[#out]:sub(-1, -1) ~= ";" then
+			out[#out] = out[#out] .. ";"
+		end
 		for i = 1,#StatementText do
-			--DOESNT WORK, WE LEAK TEXT :(
-			--just redesign this entire system man
-			-- if i > 2 then
-			-- 	if out[i]:gsub("%s*(.+)", "%1"):sub(1, 1) == "(" then
-			-- 		out[i-1] = out[i-1] .. ";"
-			-- 	end
-			-- end
 			out[#out+1] = StatementText[i]
 		end
 	end
