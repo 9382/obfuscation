@@ -55,7 +55,7 @@ local function PrintTable(tb, atIndent)
 	return out
 end
 
-local WhiteChars = lookupify{' ', '\n', '\t', '\r'}
+local WhiteChars = lookupify{' ', '\n', '\t', '\v', '\f', '\r'}
 local LowerChars = lookupify{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 
 							 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 
 							 's', 't', 'u', 'v', 'w', 'x', 'y', 'z'}
