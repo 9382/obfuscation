@@ -48,6 +48,24 @@ end
 -- Expressions that don't require bracketing to count as valid prefix expressions
 -- prefixexp ::= var | functioncall | `(´ exp `)´
 local StandardPrefixExpressions = {VarExpr=true, MemberExpr=true, IndexExpr=true, CallExpr=true, StringCallExpr=true, TableCallExpr=true}
+local UnaryPrecedence = 8
+local OperatorPrecedence = { -- From the LuaParser
+	["+"] = {6,6},
+	["-"] = {6,6},
+	["%"] = {7,7},
+	["/"] = {7,7},
+	["*"] = {7,7},
+	["^"] = {10,9},
+	[".."] = {5,4},
+	["=="] = {3,3},
+	["<"] = {3,3},
+	["<="] = {3,3},
+	["~="] = {3,3},
+	[">"] = {3,3},
+	[">="] = {3,3},
+	["and"] = {2,2},
+	["or"] = {1,1},
+}
 
 local WriteStatlist
 local function WriteExpression(Expression, Scope)
@@ -180,16 +198,46 @@ local function WriteExpression(Expression, Scope)
 		end
 		return "{" .. table.concat(Parts, CommaSplitter) .. "}"
 
-	-- Excess brackets on all operators because calculating BODMAS is lame and requires effort and im lazy
 	elseif Expression.AstType == "UnopExpr" then
+		local Rhs = Expression.Rhs
+		local RhsOut = WriteExpression(Rhs, Scope)
+		local precedence
+		if Rhs.AstType == "BinopExpr" then
+			precedence = OperatorPrecedence[Rhs.Op][2]
+		elseif Rhs.AstType == "UnopExpr" then
+			precedence = UnaryPrecedence
+		end
+		if precedence and precedence < UnaryPrecedence then
+			RhsOut = "(" .. RhsOut .. ")"
+		end
 		-- Don't really care about spacing for a unary operator, it makes it less clear if anything
 		if Expression.Op == "not" then -- Unless its a bloody not statement
-			return "(" .. Expression.Op .. " " .. WriteExpression(Expression.Rhs, Scope) .. ")"
+			return Expression.Op .. " " .. RhsOut
 		end
-		return "(" .. Expression.Op .. WriteExpression(Expression.Rhs, Scope) .. ")"
+		return Expression.Op ..RhsOut
 
 	elseif Expression.AstType == "BinopExpr" then
-		return "(" .. WriteExpression(Expression.Lhs, Scope) .. ConsiderSpacingOperator(Expression.Op) .. WriteExpression(Expression.Rhs, Scope) .. ")"
+		local Lhs, Rhs = Expression.Lhs, Expression.Rhs
+		local LhsOut, RhsOut = WriteExpression(Lhs, Scope), WriteExpression(Rhs, Scope)
+		local precedence
+		if Lhs.AstType == "BinopExpr" then
+			precedence = OperatorPrecedence[Lhs.Op][2]
+		elseif Lhs.AstType == "UnopExpr" then
+			precedence = UnaryPrecedence
+		end
+		if precedence and precedence < OperatorPrecedence[Expression.Op][1] then
+			LhsOut = "(" .. LhsOut .. ")"
+		end
+		local precedence
+		if Rhs.AstType == "BinopExpr" then
+			precedence = OperatorPrecedence[Rhs.Op][1]
+		elseif Rhs.AstType == "UnopExpr" then
+			precedence = UnaryPrecedence
+		end
+		if precedence and precedence < OperatorPrecedence[Expression.Op][2] then
+			RhsOut = "(" .. RhsOut .. ")"
+		end
+		return LhsOut .. ConsiderSpacingOperator(Expression.Op) .. RhsOut
 
 	end
 	error("We didn't return on an expression!? " .. tostring(Expression) .. " " .. (type(Expression)=="table" and tostring(Expression.AstType) or "<no AST>"))
