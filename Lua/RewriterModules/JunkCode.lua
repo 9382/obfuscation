@@ -102,5 +102,7 @@ end
 
 return function(TableObj, Options)
 	RewriterOptions = Options
-	return InsertJunkCode(TableObj)
+	if Options.AddJunkCode then
+		InsertJunkCode(TableObj)
+	end
 end

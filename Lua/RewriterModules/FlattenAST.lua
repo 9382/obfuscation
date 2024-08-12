@@ -570,5 +570,9 @@ end
 
 return function(TableObj, Options)
 	RewriterOptions = Options
-	return PerformFlattening(TableObj)
+	if RewriterOptions.PerformCodeFlattening then
+		return PerformFlattening(TableObj)
+	else
+		return TableObj.Body
+	end
 end

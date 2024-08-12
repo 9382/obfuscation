@@ -153,21 +153,7 @@ local function WriteExpression(Expression, Scope)
 		end
 
 	elseif Expression.AstType == "NumberExpr" then
-		local NumberValue = tonumber(Expression.Value.Data)
-		if RewriterOptions.ObscureNumbers and tostring(NumberValue) == Expression.Value.Data then -- TODO: :/ code, this should ideally be elsewhere
-			local offset = math.random(-10,10)
-			local mode = math.random(1,3)
-			if mode == 1 then
-				return "(" .. tostring(NumberValue-offset) .. "+" .. offset .. ")"
-			elseif mode == 2 then
-				offset = math.abs(offset)
-				return "(" .. tostring(NumberValue-offset) .. "+#\"" .. GenerateRandomString(offset) .. "\")"
-			elseif mode == 3 then
-				return "(" .. tostring(NumberValue-1) .. "+#{\"" .. GenerateRandomString() .. "\"})"
-			end
-		else
-			return Expression.Value.Data
-		end
+		return Expression.Value.Data
 
 	elseif Expression.AstType == "StringExpr" then
 		return Expression.Value.Data
