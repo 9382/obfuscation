@@ -68,7 +68,7 @@ local OperatorPrecedence = { -- From the LuaParser
 }
 
 local WriteStatlist
-local function WriteExpression(Expression, Scope)
+local function WriteExpression(Expression)
 	Expression.ParenCount = Expression.ParenCount or 0
 	if Expression.AstType == "Function" then
 		local NewArguments = {}
@@ -94,7 +94,7 @@ local function WriteExpression(Expression, Scope)
 		end
 
 	elseif Expression.AstType == "MemberExpr" then
-		local Base = WriteExpression(Expression.Base, Scope)
+		local Base = WriteExpression(Expression.Base)
 		local BaseAst = Expression.Base.AstType
 		if not StandardPrefixExpressions[BaseAst] then --Special case for non-standard prefix expressions
 			Base = "(" .. Base .. ")"
@@ -102,15 +102,15 @@ local function WriteExpression(Expression, Scope)
 		return Base .. Expression.Indexer .. Expression.Ident.Data
 
 	elseif Expression.AstType == "IndexExpr" then
-		local Base = WriteExpression(Expression.Base, Scope)
+		local Base = WriteExpression(Expression.Base)
 		local BaseAst = Expression.Base.AstType
 		if not StandardPrefixExpressions[BaseAst] then --Special case for non-standard prefix expressions
 			Base = "(" .. Base .. ")"
 		end
-		return Base .. "[" .. WriteExpression(Expression.Index, Scope) .. "]"
+		return Base .. "[" .. WriteExpression(Expression.Index) .. "]"
 
 	elseif Expression.AstType == "CallExpr" then
-		local Base = WriteExpression(Expression.Base, Scope)
+		local Base = WriteExpression(Expression.Base)
 		local BaseAst = Expression.Base.AstType
 		if not StandardPrefixExpressions[BaseAst] then --Special case for non-standard prefix expressions
 			Base = "(" .. Base .. ")"
@@ -118,12 +118,12 @@ local function WriteExpression(Expression, Scope)
 		if RewriterOptions.UseShortCallExprs and #Expression.Arguments == 1 then
 			local Arg1 = Expression.Arguments[1]
 			if Arg1.AstType == "StringExpr" or Arg1.AstType == "ConstructorExpr" then
-				return Base .. WriteExpression(Arg1, Scope)
+				return Base .. WriteExpression(Arg1)
 			end
 		end
 		local NewArguments = {}
 		for i,Argument in ipairs(Expression.Arguments) do
-			NewArguments[i] = WriteExpression(Argument, Scope)
+			NewArguments[i] = WriteExpression(Argument)
 		end
 		if Expression.ParenCount > 0 then
 			return "(" .. Base .. "(" .. table.concat(NewArguments, CommaSplitter) .. "))" --subtle truncation
@@ -132,7 +132,7 @@ local function WriteExpression(Expression, Scope)
 		end
 
 	elseif Expression.AstType == "StringCallExpr" or Expression.AstType == "TableCallExpr" then
-		local Base = WriteExpression(Expression.Base, Scope)
+		local Base = WriteExpression(Expression.Base)
 		local BaseAst = Expression.Base.AstType
 		if not StandardPrefixExpressions[BaseAst] then --Special case for non-standard prefix expressions
 			Base = "(" .. Base .. ")"
@@ -141,7 +141,7 @@ local function WriteExpression(Expression, Scope)
 		if Expression.AstType == "StringCallExpr" then
 			Argument = Expression.Arguments[1].Data
 		else
-			Argument = WriteExpression(Expression.Arguments[1], Scope)
+			Argument = WriteExpression(Expression.Arguments[1])
 		end
 		if not RewriterOptions.UseShortCallExprs then
 			Argument = "(" .. Argument .. ")"
@@ -175,18 +175,18 @@ local function WriteExpression(Expression, Scope)
 		local Parts = {}
 		for i,Entry in ipairs(Expression.EntryList) do
 			if Entry.Type == "Value" then
-				Parts[#Parts+1] = WriteExpression(Entry.Value, Scope)
+				Parts[#Parts+1] = WriteExpression(Entry.Value)
 			elseif Entry.Type == "Key" then
-				Parts[#Parts+1] = "[" .. WriteExpression(Entry.Key, Scope) .. "]" .. EqualsSplitter .. WriteExpression(Entry.Value, Scope)
+				Parts[#Parts+1] = "[" .. WriteExpression(Entry.Key) .. "]" .. EqualsSplitter .. WriteExpression(Entry.Value)
 			else--if Entry.Type == "Keystring" then
-				Parts[#Parts+1] = Entry.Key .. EqualsSplitter .. WriteExpression(Entry.Value, Scope)
+				Parts[#Parts+1] = Entry.Key .. EqualsSplitter .. WriteExpression(Entry.Value)
 			end
 		end
 		return "{" .. table.concat(Parts, CommaSplitter) .. "}"
 
 	elseif Expression.AstType == "UnopExpr" then
 		local Rhs = Expression.Rhs
-		local RhsOut = WriteExpression(Rhs, Scope)
+		local RhsOut = WriteExpression(Rhs)
 		local precedence
 		if Rhs.AstType == "BinopExpr" then
 			precedence = OperatorPrecedence[Rhs.Op][2]
@@ -204,7 +204,7 @@ local function WriteExpression(Expression, Scope)
 
 	elseif Expression.AstType == "BinopExpr" then
 		local Lhs, Rhs = Expression.Lhs, Expression.Rhs
-		local LhsOut, RhsOut = WriteExpression(Lhs, Scope), WriteExpression(Rhs, Scope)
+		local LhsOut, RhsOut = WriteExpression(Lhs), WriteExpression(Rhs)
 		local precedence
 		if Lhs.AstType == "BinopExpr" then
 			precedence = OperatorPrecedence[Lhs.Op][2]
@@ -229,13 +229,13 @@ local function WriteExpression(Expression, Scope)
 	error("We didn't return on an expression!? " .. tostring(Expression) .. " " .. (type(Expression)=="table" and tostring(Expression.AstType) or "<no AST>"))
 end
 
-local function WriteStatement(Statement, Scope)
+local function WriteStatement(Statement)
 	if Statement.AstType == "Function" then
 		local start
 		if Statement.IsLocal then
 			start = "local function " .. Statement.Name.Name
 		else
-			start = "function " .. WriteExpression(Statement.Name, Scope)
+			start = "function " .. WriteExpression(Statement.Name)
 		end
 		local NewArguments = {}
 		for i,Argument in ipairs(Statement.Arguments) do
@@ -256,9 +256,9 @@ local function WriteStatement(Statement, Scope)
 		local Lines = {}
 		for i,Clause in ipairs(Statement.Clauses) do
 			if i == 1 then
-				Lines[#Lines+1] = "if " .. WriteExpression(Clause.Condition, Scope) .. " then"
+				Lines[#Lines+1] = "if " .. WriteExpression(Clause.Condition) .. " then"
 			elseif Clause.Condition then
-				Lines[#Lines+1] = "elseif " .. WriteExpression(Clause.Condition, Scope) .. " then"
+				Lines[#Lines+1] = "elseif " .. WriteExpression(Clause.Condition) .. " then"
 			else
 				Lines[#Lines+1] = "else"
 			end
@@ -271,7 +271,7 @@ local function WriteStatement(Statement, Scope)
 		return CompileWithFormattingData(Lines)
 
 	elseif Statement.AstType == "WhileStatement" then
-		local Lines = {"while " .. WriteExpression(Statement.Condition, Scope) .. " do"}
+		local Lines = {"while " .. WriteExpression(Statement.Condition) .. " do"}
 		local Body = WriteStatlist(Statement.Body)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
@@ -290,9 +290,9 @@ local function WriteStatement(Statement, Scope)
 
 	elseif Statement.AstType == "NumericForStatement" then
 		local Variable = Statement.Variable.Name
-		local Start = WriteExpression(Statement.Start, Scope)
-		local End = WriteExpression(Statement.End, Scope)
-		local Elements = {Start, End, Statement.Step and WriteExpression(Statement.Step, Scope)}
+		local Start = WriteExpression(Statement.Start)
+		local End = WriteExpression(Statement.End)
+		local Elements = {Start, End, Statement.Step and WriteExpression(Statement.Step)}
 		local Lines = {"for " .. Variable .. EqualsSplitter .. table.concat(Elements, CommaSplitter) .. " do"}
 		local Body = WriteStatlist(Statement.Body)
 		for i = 1,#Body do
@@ -308,7 +308,7 @@ local function WriteStatement(Statement, Scope)
 		end
 		local NewGenerators = {}
 		for i,Generator in ipairs(Statement.Generators) do
-			NewGenerators[i] = WriteExpression(Generator, Scope)
+			NewGenerators[i] = WriteExpression(Generator)
 		end
 		local Lines = {"for " .. table.concat(NewVariables, CommaSplitter) .. " in " .. table.concat(NewGenerators, CommaSplitter) .. " do"}
 		local Body = WriteStatlist(Statement.Body)
@@ -324,13 +324,13 @@ local function WriteStatement(Statement, Scope)
 		for i = 1,#Body do
 			Lines[#Lines+1] = Body[i]
 		end
-		Lines[#Lines+1] = "until " .. WriteExpression(Statement.Condition, Scope)
+		Lines[#Lines+1] = "until " .. WriteExpression(Statement.Condition)
 		return CompileWithFormattingData(Lines)
 
 	elseif Statement.AstType == "LocalStatement" then
 		local NewValues = {}
 		for i,Value in ipairs(Statement.InitList) do
-			NewValues[i] = WriteExpression(Value, Scope)
+			NewValues[i] = WriteExpression(Value)
 		end
 		local NewLocals = {}
 		for i,Local in ipairs(Statement.LocalList) do
@@ -348,7 +348,7 @@ local function WriteStatement(Statement, Scope)
 		end
 		local NewArguments = {}
 		for i,Argument in ipairs(Statement.Arguments) do
-			NewArguments[i] = WriteExpression(Argument, Scope)
+			NewArguments[i] = WriteExpression(Argument)
 		end
 		return "return " .. table.concat(NewArguments, CommaSplitter)
 
@@ -361,16 +361,16 @@ local function WriteStatement(Statement, Scope)
 	elseif Statement.AstType == "AssignmentStatement" then
 		local NewLhs = {}
 		for i,Value in ipairs(Statement.Lhs) do
-			NewLhs[i] = WriteExpression(Value, Scope)
+			NewLhs[i] = WriteExpression(Value)
 		end
 		local NewRhs = {}
 		for i,Value in ipairs(Statement.Rhs) do
-			NewRhs[i] = WriteExpression(Value, Scope)
+			NewRhs[i] = WriteExpression(Value)
 		end
 		return table.concat(NewLhs, CommaSplitter) .. EqualsSplitter .. table.concat(NewRhs, CommaSplitter)
 
 	elseif Statement.AstType == "CallStatement" then
-		return WriteExpression(Statement.Expression, Scope)
+		return WriteExpression(Statement.Expression)
 
 	end
 	error("We didn't return on a statement!? " .. tostring(Statement) .. " " .. tostring(type(Statement) == "table" and Statement.AstType or "<no AST>"))
@@ -396,10 +396,9 @@ end
 
 --cringe string split magic but its needed, trust
 WriteStatlist = function(Statlist, DontIndent)
-	local Scope = Statlist.Body.Scope
 	local out = {}
 	for _,Statement in ipairs(Statlist.Body) do
-		local StatementText = StringSplit(WriteStatement(Statement, Scope) .. ConsiderSemicolon(), "\n")
+		local StatementText = StringSplit(WriteStatement(Statement) .. ConsiderSemicolon(), "\n")
 		if #out > 0 and StatementText[1]:sub(1, 1) == "(" and out[#out]:sub(-1, -1) ~= ";" then
 			out[#out] = out[#out] .. ";"
 		end
