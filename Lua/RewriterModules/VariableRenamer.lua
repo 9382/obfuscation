@@ -60,10 +60,22 @@ local function GenerateFirstAvailableName(ExistingNames)
 end
 
 --== Regular non-aggressive renaming ==--
+local KnownConversions = {}
 local function RenameScopeVariables(Scope)
 	for i,Local in next,Scope.LocalsInOrder do
 		if Local.CanRename then
-			Local.Name = GenerateVariableName(Local.Name)
+			if RewriterOptions.MinifyVariableNames then
+				if not KnownConversions[Local.Name] then
+					KnownConversions[Local.Name] = GenerateVariableName(Local.Name)
+				end
+				Scope.LocalMap[KnownConversions[Local.Name]] = Local
+				Local.Name = KnownConversions[Local.Name]
+			else
+				-- Don't repeat when obscuring
+				local NewName = GenerateVariableName(Local.Name)
+				Scope.LocalMap[NewName] = Local
+				Local.Name = NewName
+			end
 			Local.CanRename = false --shouldn't have to do this but flattener is trying to fight me
 			--theres a potential that LocalStatement/Function special handling is double-defining locals
 		end
@@ -223,6 +235,7 @@ local function AggressivelyRenameLocals(Statlist)
 		for _, Local in next, ToName do -- in 2 parts since we want to remove all now-unused names first
 			local NewName = GenerateFirstAvailableName(UsedNames)
 			UsedNames[NewName] = true
+			Scope.LocalMap[NewName] = Local
 			Local.Name = NewName
 			Local.CanRename = false
 		end
@@ -243,6 +256,7 @@ return function(AST, Options)
 		CompileLocalData(AST)
 		AggressivelyRenameLocals(AST)
 	elseif RewriterOptions.ObscureVariableNames or RewriterOptions.MinifyVariableNames then
+		KnownConversions = {}
 		RenameScopeVariables(AST.Scope)
 	end
 end
