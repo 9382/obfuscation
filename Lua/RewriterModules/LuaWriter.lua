@@ -16,27 +16,6 @@ local function ConsiderSemicolon()
 	end
 end
 
-local _ValidCharacters = "_abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789"
-local function GenerateRandomString(P1, P2)
-	if P2 then --Min, Max
-		P1 = P2 - math.random(0, P2-P1)
-	elseif P1 then --Exact
-		-- Do nothing
-	else --No input, use default
-		P1 = math.random(20, 25)
-	end
-	local out = ""
-	for i = 1,P1 do
-		local max = #_ValidCharacters
-		if i == 1 then
-			max = max - 10
-		end
-		local choice = math.random(1,max)
-		out = out .. string.sub(_ValidCharacters,choice,choice)
-	end
-	return out
-end
-
 local function CompileWithFormattingData(Lines)
 	if RewriterOptions.UseNewlines then
 		return table.concat(Lines,"\n")
@@ -222,6 +201,9 @@ local function WriteExpression(Expression)
 		end
 		if precedence and precedence < OperatorPrecedence[Expression.Op][2] then
 			RhsOut = "(" .. RhsOut .. ")"
+		end
+		if Expression.Op == "or" or Expression.Op == "and" then
+			return LhsOut .. " " .. RhsOut
 		end
 		return LhsOut .. ConsiderSpacingOperator(Expression.Op) .. RhsOut
 
