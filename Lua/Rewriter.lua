@@ -1,5 +1,6 @@
 local ParseLua = require("./LuaParser")
 local LuaWriter = require("./RewriterModules/LuaWriter")
+local MinimalLuaWriter = require("./RewriterModules/MinimalLuaWriter")
 local PerformFlattening = require("./RewriterModules/FlattenAST")
 local InsertJunkCode = require("./RewriterModules/JunkCode")
 local RenameVariables = require("./RewriterModules/VariableRenamer")
@@ -13,6 +14,11 @@ print("Using seed", _seed)
 
 local RewriterConfig = {
 	LuaWriterOptions = {
+		--== UseMinimalWriter ==--
+		-- Uses the minimal rewriter, which prioritises small code over readable code
+		-- All other options will be ignored if this is enabled
+		UseMinimalWriter = true,
+
 		--== IndentCharacter ==--
 		-- The character used for indenting
 		-- Ignored if code is one-lined
@@ -111,7 +117,12 @@ local function Main(C)
 	RenameVariables(p, RewriterConfig.VariableRenamerOptions)
 
 	-- Write the code
-	local out = LuaWriter(p, RewriterConfig.LuaWriterOptions)
+	local out
+	if RewriterConfig.LuaWriterOptions.UseMinimalWriter then
+		out = MinimalLuaWriter(p)
+	else
+		out = LuaWriter(p, RewriterConfig.LuaWriterOptions)
+	end
 
 	-- Output modifications
 	out = FunnyStuff(out, RewriterConfig.FunOptions)
