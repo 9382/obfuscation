@@ -83,7 +83,7 @@ local RewriterConfig = {
 
 		--== ApplyBinarySearch ==--
 		-- Optimises the if structure of the code flattener (highly recommended)
-		ApplyBinarySearch = false,
+		ApplyBinarySearch = true,
 	},
 
 	FunOptions = {
