@@ -199,7 +199,7 @@ local function WriteExpression(Expression)
 		elseif Rhs.AstType == "UnopExpr" then
 			precedence = UnaryPrecedence
 		end
-		if precedence and precedence < OperatorPrecedence[Expression.Op][2] then
+		if precedence and precedence <= OperatorPrecedence[Expression.Op][2] then
 			RhsOut = "(" .. RhsOut .. ")"
 		end
 		if Expression.Op == "or" or Expression.Op == "and" then

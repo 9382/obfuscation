@@ -201,7 +201,7 @@ local function WriteExpression(Expression, IsExpandable)
 		elseif Rhs.AstType == "UnopExpr" then
 			precedence = UnaryPrecedence
 		end
-		if precedence and precedence < OperatorPrecedence[Expression.Op][2] then
+		if precedence and precedence <= OperatorPrecedence[Expression.Op][2] then
 			RhsOut = "(" .. RhsOut .. ")"
 		end
 		return JoinWithOperator(LhsOut, Expression.Op, RhsOut)
