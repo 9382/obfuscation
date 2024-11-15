@@ -203,7 +203,7 @@ local function WriteExpression(Expression)
 			RhsOut = "(" .. RhsOut .. ")"
 		end
 		if Expression.Op == "or" or Expression.Op == "and" then
-			return LhsOut .. " " .. RhsOut
+			return LhsOut .. " " .. Expression.Op .. " " .. RhsOut
 		end
 		return LhsOut .. ConsiderSpacingOperator(Expression.Op) .. RhsOut
 
