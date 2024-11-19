@@ -389,7 +389,6 @@ local function JoinStatements(LeftText, LeftStatement, RightText, RightStatement
 			LastExpression = LastExpression.Rhs
 		end
 		if not LastExpression then
-			print("me is special case", LeftType, LeftText)
 			-- Special case of a `local a,b,c` with no `=` part or an empty `return`
 			return LeftText .. RightText
 		elseif
