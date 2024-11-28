@@ -55,6 +55,8 @@ local function PrintTable(tb, atIndent)
 	return out
 end
 
+local LUA_COMPAT_VARARG = false
+
 local WhiteChars = lookupify{' ', '\n', '\t', '\v', '\f', '\r'}
 local LowerChars = lookupify{'a', 'b', 'c', 'd', 'e', 'f', 'g', 'h', 'i', 
 							 'j', 'k', 'l', 'm', 'n', 'o', 'p', 'q', 'r', 
@@ -573,6 +575,9 @@ local function ParseLua(src)
 				end
 			elseif tok:ConsumeSymbol('...') then
 				isVarArg = true
+				if LUA_COMPAT_VARARG then
+					local arg = funcScope:CreateLocal("arg", false)
+				end
 				if not tok:ConsumeSymbol(')') then
 					return false, GenerateError("`...` must be the last argument of a function.")
 				end
