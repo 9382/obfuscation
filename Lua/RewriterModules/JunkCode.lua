@@ -94,7 +94,7 @@ local function InsertJunkCode(TableObj, blacklist)
 		end
 	end
 	for a,b in next,TableObj do
-		if type(b) == "table" and (RewriterOptions.AllowNestedJunkCode or not b.IsJunk) then
+		if type(b) == "table" and a ~= "Scope" and (RewriterOptions.AllowNestedJunkCode or not b.IsJunk) then
 			InsertJunkCode(b, blacklist)
 		end
 	end
