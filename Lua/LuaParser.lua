@@ -71,11 +71,14 @@ local HexDigits = lookupify{'0', '1', '2', '3', '4', '5', '6', '7', '8', '9',
 local Symbols = lookupify{'+', '-', '*', '/', '^', '%', ',', '{', '}', '[', ']', '(', ')', ';', '#'}
 
 local Keywords = lookupify{
-		'and', 'break', 'continue', 'do', 'else', 'elseif',
+		'and', 'break', 'do', 'else', 'elseif',
 		'end', 'false', 'for', 'function', 'goto', 'if',
 		'in', 'local', 'nil', 'not', 'or', 'repeat',
 		'return', 'then', 'true', 'until', 'while',
-};
+}
+local LooseKeywords = lookupify{ -- Keywords that can also be used as variable names
+	'continue',
+}
 
 local BackslashEscaping = {
 	a="\a", b="\b", f="\f", n="\n", r="\r", t="\t", v="\v",
@@ -230,6 +233,8 @@ local function LexLua(src)
 				local dat = src:sub(start, p-1)
 				if Keywords[dat] then
 					toEmit = {Type = 'Keyword', Data = dat}
+				elseif LooseKeywords[dat] then
+					toEmit = {Type = 'LooseKeyword', Data = dat}
 				else
 					toEmit = {Type = 'Ident', Data = dat}
 				end
@@ -387,7 +392,8 @@ local function LexLua(src)
 		return t
 	end
 	function tok:Is(t)
-		return tok:Peek().Type == t
+		local pt = tok:Peek().Type
+		return pt == t or ((t == 'Ident' or t == 'Keyword') and pt == 'LooseKeyword')
 	end
 
 	--save / restore points in the stream
@@ -425,7 +431,7 @@ local function LexLua(src)
 
 	function tok:ConsumeKeyword(kw)
 		local t = self:Peek()
-		if t.Type == 'Keyword' and t.Data == kw then
+		if (t.Type == 'Keyword' or t.Type == 'LooseKeyword') and t.Data == kw then
 			self:Get()
 			return true
 		else
@@ -435,7 +441,7 @@ local function LexLua(src)
 
 	function tok:IsKeyword(kw)
 		local t = tok:Peek()
-		return t.Type == 'Keyword' and t.Data == kw
+		return (t.Type == 'Keyword' or t.Type == 'LooseKeyword') and t.Data == kw
 	end
 
 	function tok:IsSymbol(s)
