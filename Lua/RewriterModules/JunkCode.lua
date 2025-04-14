@@ -63,6 +63,7 @@ local function GenerateJunkCode(Scope)
 	for _, Local in next, r.Scope.LocalsInOrder do
 		Local.Scope = Scope
 		Scope.LocalsInOrder[#Scope.LocalsInOrder+1] = Local
+		Scope.LocalMap[Local.Name] = Local
 	end
 	for _, Child in next, r.Scope.Children do
 		Child.Parent = Scope
