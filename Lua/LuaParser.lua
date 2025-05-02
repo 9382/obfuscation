@@ -290,7 +290,7 @@ local function LexLua(src)
 									num = num .. get()
 								end
 								parsedString = parsedString .. string.char(tonumber(num))
-							else
+							elseif next ~= "\r" and next ~= "\n" then
 								generateError("invalid escape sequence near '"..delim.."'") -- Same here - some versions see this as an error, others just ignore the \ and move on
 							end
 						end
